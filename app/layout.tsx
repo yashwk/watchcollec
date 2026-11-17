@@ -24,20 +24,20 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Rolex — Perpetual 3D Horology Showcase',
+  title: 'Atelier Horloger — Multi-Maison 3D Horology Studio',
   description:
-    'Interactive 3D Rolex timepiece atelier featuring live mechanical calibers, custom alloys and dials, exploded view, and curated collection.',
+    'Interactive 3D Haute Horlogerie showcase spanning Rolex, Omega, Audemars Piguet, Patek Philippe, Cartier, Jaeger-LeCoultre, Grand Seiko, A. Lange & Söhne, Richard Mille, and AVI-8.',
   openGraph: {
-    title: 'Rolex — Perpetual 3D Horology Showcase',
+    title: 'Atelier Horloger — Multi-Maison 3D Horology Studio',
     description:
-      'Interactive 3D Rolex timepiece atelier featuring live mechanical calibers, custom alloys and dials, exploded view, and curated collection.',
+      'Interactive 3D Haute Horlogerie showcase spanning iconic Swiss, Saxon, Japanese, French, and aviation maisons.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Rolex — Perpetual 3D Horology Showcase',
+    title: 'Atelier Horloger — Multi-Maison 3D Horology Studio',
     description:
-      'Interactive 3D Rolex timepiece atelier featuring live mechanical calibers, custom alloys and dials, exploded view, and curated collection.',
+      'Interactive 3D Haute Horlogerie showcase spanning iconic Swiss, Saxon, Japanese, French, and aviation maisons.',
   },
 };
 

@@ -10,8 +10,11 @@ import React, {
 import Image from 'next/image';
 import {
   Archive,
+  BookOpen,
   Camera,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Clock,
   Columns2,
@@ -25,6 +28,8 @@ import {
   FlipHorizontal2,
   Gauge,
   Layers,
+  LayoutGrid,
+  Link2,
   Minimize2,
   Moon,
   Mountain,
@@ -38,11 +43,13 @@ import {
   Ruler,
   ScanEye,
   Search,
+  Share2,
   Sparkles,
   Sun,
   Sunrise,
   Timer,
   Trash2,
+  Trophy,
   Video,
   Volume2,
   VolumeX,
@@ -52,10 +59,14 @@ import {
 import {
   ALLOY_OPTIONS,
   AlloyId,
+  AtelierTourStep,
   BELT_OPTIONS,
+  BELT_SHADE_OPTIONS,
   BEZEL_OPTIONS,
   BeltId,
+  BeltShadeId,
   BezelId,
+  CURATED_SHOWDOWNS,
   CameraPresetId,
   DIAL_OPTIONS,
   DialId,
@@ -66,8 +77,12 @@ import {
   WATCH_MODELS,
   WatchCategoryId,
   WatchModelId,
+  getAtelierTourSteps,
+  getBeltLabelForWatch,
+  getShortBeltTabLabel,
   getWatchById,
   resolveAlloy,
+  resolveBeltShade,
   resolveBezel,
   resolveDial,
 } from '@/lib/watches';
@@ -84,15 +99,22 @@ export interface VaultSlotPreset {
   dialId: DialId;
   bezelId: BezelId;
   beltId: BeltId;
+  beltShadeId?: BeltShadeId;
   lightingMode: LightingModeId;
   customEngraving: string;
   patina: number;
   glidelockMm: number;
+  label?: string;
   savedAt: string;
 }
 
-const VAULT_STORAGE_KEY = 'rolex_studio_vault_v1';
-const VAULT_EMPTY_SNAPSHOT: (VaultSlotPreset | null)[] = [null, null, null];
+const VAULT_SLOT_COUNT = 6;
+const VAULT_STORAGE_KEY = 'chrono_studio_vault_v1';
+const LEGACY_VAULT_STORAGE_KEY = 'rolex_studio_vault_v1';
+const VAULT_EMPTY_SNAPSHOT: (VaultSlotPreset | null)[] = Array.from(
+  { length: VAULT_SLOT_COUNT },
+  () => null
+);
 let cachedVaultRaw: string | null | undefined = undefined;
 let cachedVaultParsed: (VaultSlotPreset | null)[] = VAULT_EMPTY_SNAPSHOT;
 const vaultListeners = new Set<() => void>();
@@ -101,7 +123,7 @@ function subscribeVaultStore(cb: () => void) {
   vaultListeners.add(cb);
   if (typeof window !== 'undefined') {
     const onStorage = (e: StorageEvent) => {
-      if (e.key === VAULT_STORAGE_KEY) {
+      if (e.key === VAULT_STORAGE_KEY || e.key === LEGACY_VAULT_STORAGE_KEY) {
         cachedVaultRaw = undefined;
         cb();
       }
@@ -120,7 +142,9 @@ function subscribeVaultStore(cb: () => void) {
 function getVaultSnapshot(): (VaultSlotPreset | null)[] {
   if (typeof window === 'undefined') return VAULT_EMPTY_SNAPSHOT;
   try {
-    const raw = window.localStorage.getItem(VAULT_STORAGE_KEY);
+    const raw =
+      window.localStorage.getItem(VAULT_STORAGE_KEY) ??
+      window.localStorage.getItem(LEGACY_VAULT_STORAGE_KEY);
     if (raw === cachedVaultRaw) return cachedVaultParsed;
     cachedVaultRaw = raw;
     if (!raw) {
@@ -129,11 +153,10 @@ function getVaultSnapshot(): (VaultSlotPreset | null)[] {
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      cachedVaultParsed = [
-        parsed[0] ?? null,
-        parsed[1] ?? null,
-        parsed[2] ?? null,
-      ];
+      cachedVaultParsed = Array.from(
+        { length: VAULT_SLOT_COUNT },
+        (_, idx) => parsed[idx] ?? null
+      );
     } else {
       cachedVaultParsed = VAULT_EMPTY_SNAPSHOT;
     }
@@ -162,6 +185,12 @@ function writeVaultSlots(next: (VaultSlotPreset | null)[]) {
 interface WatchStudioViewportProps {
   selectedModel: WatchModelId;
   onSelectModel: (id: WatchModelId) => void;
+  compareModelId: WatchModelId | null;
+  onChangeCompareModelId: (id: WatchModelId | null) => void;
+  onActivateShowdown?: (primaryId: WatchModelId, compareId: WatchModelId) => void;
+  onOpenCatalog: () => void;
+  onCycleNavStyle: () => void;
+  stageShiftX: number;
   alloyId: AlloyId;
   onChangeAlloyId: (id: AlloyId) => void;
   dialId: DialId;
@@ -170,6 +199,8 @@ interface WatchStudioViewportProps {
   onChangeBezelId: (id: BezelId) => void;
   beltId: BeltId;
   onChangeBeltId: (id: BeltId) => void;
+  beltShadeId: BeltShadeId;
+  onChangeBeltShadeId: (id: BeltShadeId) => void;
   exhibitionMode: boolean;
   onToggleExhibition: () => void;
   lightingMode: LightingModeId;
@@ -182,6 +213,7 @@ interface WatchStudioViewportProps {
     dialId: DialId;
     bezelId: BezelId;
     beltId: BeltId;
+    beltShadeId?: BeltShadeId;
     lightingMode: LightingModeId;
   }) => void;
 }
@@ -215,6 +247,12 @@ function formatChronoTime(sec: number): string {
 export default function WatchStudioViewport({
   selectedModel,
   onSelectModel,
+  compareModelId,
+  onChangeCompareModelId,
+  onActivateShowdown,
+  onOpenCatalog,
+  onCycleNavStyle,
+  stageShiftX,
   alloyId,
   onChangeAlloyId,
   dialId,
@@ -223,6 +261,8 @@ export default function WatchStudioViewport({
   onChangeBezelId,
   beltId,
   onChangeBeltId,
+  beltShadeId,
+  onChangeBeltShadeId,
   exhibitionMode,
   onToggleExhibition,
   lightingMode,
@@ -252,7 +292,6 @@ export default function WatchStudioViewport({
   const [crownPulled, setCrownPulled] = useState<boolean>(false);
   const [claspOpen, setClaspOpen] = useState<boolean>(false);
   const [xrayDial, setXrayDial] = useState<boolean>(false);
-  const [compareModelId, setCompareModelId] = useState<WatchModelId | null>(null);
   const [customEngraving, setCustomEngraving] = useState<string>('');
   const [engraveOpen, setEngraveOpen] = useState<boolean>(false);
   const [patina, setPatina] = useState<number>(0);
@@ -264,6 +303,7 @@ export default function WatchStudioViewport({
   const [caliperMode, setCaliperMode] = useState<boolean>(false);
   const [glidelockMm, setGlidelockMm] = useState<number>(0);
   const [powerReservePct, setPowerReservePct] = useState<number>(82);
+  const [bezelAngleDeg, setBezelAngleDeg] = useState<number>(0);
   const [vaultOpen, setVaultOpen] = useState<boolean>(false);
   const vaultSlots = useSyncExternalStore(
     subscribeVaultStore,
@@ -289,10 +329,24 @@ export default function WatchStudioViewport({
   const [chromeIdle, setChromeIdle] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [webglError, setWebglError] = useState<boolean>(false);
+  const [tourModelId, setTourModelId] = useState<WatchModelId | null>(null);
+  const [tourStepIdx, setTourStepIdx] = useState<number>(0);
+  const [tourAutoPlay, setTourAutoPlay] = useState<boolean>(false);
+  const tourPrevLightingRef = useRef<LightingModeId | null>(null);
+  const tourPrevReversoRef = useRef<boolean>(false);
 
   const isLightBackdrop = lightingMode === 'alpine';
   const activeWatch = getWatchById(selectedModel);
-  const effectiveReversoFlipped = Boolean(activeWatch.hasReversoFlip && reversoFlipped);
+  const hasReversoFlip = Boolean(activeWatch.hasReversoFlip);
+  const isChronoRunning = chronoTelemetry.running;
+  const brandSlug = activeWatch.brand
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+  const tourSteps = getAtelierTourSteps(activeWatch);
+  const tourActive = tourModelId === selectedModel;
+  const currentTourStep = tourActive ? tourSteps[tourStepIdx] ?? tourSteps[0] : null;
+  const effectiveReversoFlipped = Boolean(hasReversoFlip && reversoFlipped);
   const lugToLugMm =
     activeWatch.lugToLugMm ?? Number((activeWatch.caseDiameterMm + 7.2).toFixed(1));
   const wristFitRatio = lugToLugMm / (wristMm * 0.34);
@@ -306,15 +360,22 @@ export default function WatchStudioViewport({
   const activeAlloy = resolveAlloy(activeWatch, alloyId);
   const activeDial = resolveDial(activeWatch, dialId);
   const activeBezel = resolveBezel(activeWatch, bezelId);
-  const activeBeltLabel =
-    BELT_OPTIONS.find((b) => b.id === beltId)?.label ?? 'Bracelet';
+  const activeBeltLabel = getBeltLabelForWatch(activeWatch, beltId);
+  const activeBeltShade = resolveBeltShade(activeWatch, beltShadeId);
   const activeHotspot =
     WATCH_HOTSPOTS.find((h) => h.id === activeHotspotId) ?? null;
 
   const hasCerachromBezel =
     activeWatch.bezelType === 'dive-cerachrom' ||
+    activeWatch.bezelType === 'seamaster' ||
     activeWatch.bezelType === 'yacht-cerachrom' ||
     activeWatch.bezelType === 'tachymeter' ||
+    activeWatch.bezelType === 'gmt-cerachrom';
+
+  const hasInteractiveBezel =
+    activeWatch.bezelType === 'navitimer' ||
+    activeWatch.bezelType === 'dive-cerachrom' ||
+    activeWatch.bezelType === 'seamaster' ||
     activeWatch.bezelType === 'gmt-cerachrom';
 
   const showToast = useCallback((msg: string) => {
@@ -382,6 +443,7 @@ export default function WatchStudioViewport({
               dialId,
               bezelId,
               beltId,
+              beltShadeId,
               exhibitionBack,
               explodeTarget: explode,
               lightingMode,
@@ -406,6 +468,7 @@ export default function WatchStudioViewport({
               reversoFlipped: effectiveReversoFlipped,
               caliperMode,
               glidelockMm,
+              stageShiftX,
             },
             {
               onContextLost: () => setWebglError(true),
@@ -420,6 +483,7 @@ export default function WatchStudioViewport({
               onMidnightDateJump: (dayNum) =>
                 showToast(`Midnight Date Jump -> Day ${dayNum}`),
               onChronoTelemetry: (telemetry) => setChronoTelemetry(telemetry),
+              onBezelAngleChange: (deg) => setBezelAngleDeg(deg),
             }
           );
           engineRef.current = engineInstance;
@@ -450,6 +514,7 @@ export default function WatchStudioViewport({
       dialId,
       bezelId,
       beltId,
+      beltShadeId,
       exhibitionBack,
       explodeTarget: explode,
       lightingMode,
@@ -474,6 +539,7 @@ export default function WatchStudioViewport({
       reversoFlipped: effectiveReversoFlipped,
       caliperMode,
       glidelockMm,
+      stageShiftX,
     });
   }, [
     selectedModel,
@@ -482,6 +548,7 @@ export default function WatchStudioViewport({
     dialId,
     bezelId,
     beltId,
+    beltShadeId,
     exhibitionBack,
     explode,
     lightingMode,
@@ -506,9 +573,10 @@ export default function WatchStudioViewport({
     effectiveReversoFlipped,
     caliperMode,
     glidelockMm,
+    stageShiftX,
   ]);
 
-  // Keyboard shortcuts: 'H' dock, 'Esc' exit exhibition, 'Space' spin, 'L' loupe, '1-9' watch models
+  // Keyboard shortcuts: 'H' dock, 'C' navigator, 'N' cycle nav test mode, 'Esc' exit exhibition, 'Space' spin, 'L' loupe, '1-9' watch models
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (
@@ -520,6 +588,10 @@ export default function WatchStudioViewport({
       }
       if (e.key === 'h' || e.key === 'H') {
         setDockOpen((prev) => !prev);
+      } else if (e.key === 'c' || e.key === 'C') {
+        onOpenCatalog();
+      } else if (e.key === 'n' || e.key === 'N') {
+        onCycleNavStyle();
       } else if (e.key === 'l' || e.key === 'L') {
         setLoupeActive((prev) => {
           const next = !prev;
@@ -548,7 +620,14 @@ export default function WatchStudioViewport({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [exhibitionMode, onToggleExhibition, onSelectModel, selectedModel]);
+  }, [
+    exhibitionMode,
+    onToggleExhibition,
+    onSelectModel,
+    onOpenCatalog,
+    onCycleNavStyle,
+    selectedModel,
+  ]);
 
   const handleModelSwitch = (id: WatchModelId) => {
     onSelectModel(id);
@@ -570,14 +649,16 @@ export default function WatchStudioViewport({
       dialId,
       bezelId,
       beltId,
+      beltShadeId,
       lightingMode,
       customEngraving,
       patina,
       glidelockMm,
+      label: `${activeWatch.shortName} · ${activeDial.label}`,
       savedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
     writeVaultSlots(next);
-    showToast(`Saved ${activeWatch.name} to Watch Box Slot ${slotIdx + 1}`);
+    showToast(`Saved ${activeWatch.name} to Watch Vault #${slotIdx + 1}`);
   };
 
   const handleLoadVaultSlot = (slot: VaultSlotPreset) => {
@@ -591,6 +672,7 @@ export default function WatchStudioViewport({
         dialId: slot.dialId,
         bezelId: slot.bezelId,
         beltId: slot.beltId,
+        beltShadeId: slot.beltShadeId,
         lightingMode: slot.lightingMode,
       });
     } else {
@@ -606,10 +688,171 @@ export default function WatchStudioViewport({
     writeVaultSlots(next);
   };
 
+  const handleCopyShareUrl = async (customPreset?: VaultSlotPreset) => {
+    try {
+      const origin = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '';
+      let shareUrl = typeof window !== 'undefined' ? window.location.href : '';
+      if (customPreset) {
+        const spec = getWatchById(customPreset.modelId);
+        const p = new URLSearchParams();
+        if (customPreset.modelId !== 'submariner') p.set('watch', customPreset.modelId);
+        if (customPreset.alloyId !== 'default') p.set('alloy', customPreset.alloyId);
+        if (customPreset.dialId !== 'default') p.set('dial', customPreset.dialId);
+        if (customPreset.bezelId !== 'default') p.set('bezel', customPreset.bezelId);
+        if (customPreset.beltId !== (spec.defaultBelt ?? 'bracelet')) p.set('belt', customPreset.beltId);
+        if (customPreset.beltShadeId && customPreset.beltShadeId !== 'default') {
+          p.set('shade', customPreset.beltShadeId);
+        }
+        if (customPreset.lightingMode !== 'atelier') p.set('light', customPreset.lightingMode);
+        const qs = p.toString();
+        shareUrl = qs ? `${origin}?${qs}` : origin;
+      }
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+        showToast('Shareable Build URL Copied');
+      } else {
+        showToast('Share URL synced in address bar');
+      }
+    } catch {
+      showToast('Share URL synced in address bar');
+    }
+  };
+
+  const applyTourStep = useCallback(
+    (step: AtelierTourStep) => {
+      setActiveHotspotId(null);
+      setCinemaMode(false);
+      setWristMode(false);
+
+      if (step.action === 'nocturne-lume') {
+        if (tourPrevLightingRef.current === null) {
+          tourPrevLightingRef.current = lightingMode;
+        }
+        onChangeLightingMode('nocturne');
+        setUvTorch(true);
+      } else if (tourPrevLightingRef.current !== null) {
+        onChangeLightingMode(tourPrevLightingRef.current);
+        tourPrevLightingRef.current = null;
+      }
+
+      if (step.action === 'reset-hero') {
+        setExplode(0);
+        setFlipped(false);
+        if (hasReversoFlip) {
+          onChangeReversoFlipped(false);
+        }
+      } else if (step.action === 'reverso-flip') {
+        setExplode(0);
+        setFlipped(false);
+        onChangeReversoFlipped(true);
+      } else if (step.action === 'navitimer-bezel' || step.action === 'dive-bezel') {
+        setExplode(0);
+        setFlipped(false);
+        engineRef.current?.rotateBezelStep(4);
+      } else if (step.action === 'chrono-demo') {
+        setExplode(0);
+        setFlipped(false);
+        if (!isChronoRunning) {
+          engineRef.current?.toggleChronoRunning();
+        }
+      } else if (step.action === 'caliber-flip') {
+        setExplode(0);
+        setFlipped(false);
+        setExhibitionBack(true);
+      } else if (step.action === 'nocturne-lume') {
+        setExplode(0);
+        setFlipped(false);
+      } else if (step.action === 'explode-layers') {
+        setFlipped(false);
+        setExplode(0.62);
+      }
+
+      setCameraPreset(step.cameraPreset);
+      if (step.camPos && step.camTarget) {
+        engineRef.current?.focusCameraTarget(step.camPos, step.camTarget);
+      } else {
+        engineRef.current?.setCameraPreset(step.cameraPreset);
+      }
+    },
+    [
+      hasReversoFlip,
+      isChronoRunning,
+      lightingMode,
+      onChangeLightingMode,
+      onChangeReversoFlipped,
+    ]
+  );
+
+  const handleStartTour = () => {
+    const steps = getAtelierTourSteps(activeWatch);
+    tourPrevLightingRef.current = null;
+    tourPrevReversoRef.current = reversoFlipped;
+    setDockOpen(true);
+    setEngraveOpen(false);
+    setVaultOpen(false);
+    setTourModelId(selectedModel);
+    setTourStepIdx(0);
+    setTourAutoPlay(false);
+    if (steps[0]) {
+      applyTourStep(steps[0]);
+    }
+  };
+
+  const handleExitTour = () => {
+    setTourModelId(null);
+    setTourAutoPlay(false);
+    setExplode(0);
+    setFlipped(false);
+    if (tourPrevLightingRef.current !== null) {
+      onChangeLightingMode(tourPrevLightingRef.current);
+      tourPrevLightingRef.current = null;
+    }
+    if (hasReversoFlip) {
+      onChangeReversoFlipped(tourPrevReversoRef.current);
+    }
+    setCameraPreset('hero');
+    engineRef.current?.setCameraPreset('hero');
+  };
+
+  const handleToggleTour = () => {
+    if (tourActive) {
+      handleExitTour();
+    } else {
+      handleStartTour();
+    }
+  };
+
+  const handleSelectTourStep = (nextIdx: number) => {
+    const clamped = Math.max(0, Math.min(tourSteps.length - 1, nextIdx));
+    setTourStepIdx(clamped);
+    const step = tourSteps[clamped];
+    if (step) {
+      applyTourStep(step);
+    }
+  };
+
+  useEffect(() => {
+    if (!tourActive || !tourAutoPlay || exhibitionMode) return;
+    const timer = window.setTimeout(() => {
+      const nextIdx = tourStepIdx + 1;
+      if (nextIdx >= tourSteps.length) {
+        setTourAutoPlay(false);
+        return;
+      }
+      const nextStep = tourSteps[nextIdx];
+      setTourStepIdx(nextIdx);
+      if (nextStep) {
+        applyTourStep(nextStep);
+      }
+    }, 4500);
+    return () => window.clearTimeout(timer);
+  }, [tourActive, tourAutoPlay, exhibitionMode, tourStepIdx, tourSteps, applyTourStep]);
+
   const handleCameraSwitch = (preset: CameraPresetId) => {
     setCameraPreset(preset);
     setActiveHotspotId(null);
     if (preset === 'caliber') {
+      setFlipped(false);
       setExhibitionBack(true);
     }
     engineRef.current?.setCameraPreset(preset);
@@ -626,16 +869,18 @@ export default function WatchStudioViewport({
     if (!target) return;
     setActiveHotspotId(id);
     if (id === 'caliber') {
+      setFlipped(false);
       setExhibitionBack(true);
     }
     engineRef.current?.focusCameraTarget(target.camPos, target.camTarget);
   };
 
   const handleToggleCompare = () => {
-    setCompareModelId((prev) => {
-      if (prev !== null) return null;
-      return selectedModel === 'submariner' ? 'daydate' : 'submariner';
-    });
+    if (compareModelId !== null) {
+      onChangeCompareModelId(null);
+      return;
+    }
+    onChangeCompareModelId(selectedModel === 'submariner' ? 'omega-speedmaster' : 'submariner');
   };
 
   const handleToggleEngrave = () => {
@@ -680,7 +925,7 @@ export default function WatchStudioViewport({
   const handleSnapshot = () => {
     engineRef.current?.captureSnapshot((dataUrl) => {
       const link = document.createElement('a');
-      link.download = `${activeWatch.brand.toLowerCase()}-${activeWatch.id}-${activeWatch.reference}.png`;
+      link.download = `${brandSlug}-${activeWatch.id}-${activeWatch.reference}.png`;
       link.href = dataUrl;
       link.click();
       showToast('Studio Still Captured (PNG)');
@@ -752,7 +997,12 @@ export default function WatchStudioViewport({
           ['WATERPROOFNESS', activeWatch.waterResistance],
           ['ALLOY FINISH', activeAlloy.label],
           ['DIAL EDITION', activeDial.label],
-          ['STRAP / BELT', activeBeltLabel],
+          [
+            'STRAP / BELT',
+            beltId !== 'bracelet'
+              ? `${activeBeltLabel} (${activeBeltShade.label})`
+              : activeBeltLabel,
+          ],
         ];
         if (customEngraving.trim()) {
           rows.push(['CASEBACK ENGRAVING', customEngraving.trim().toUpperCase()]);
@@ -778,7 +1028,7 @@ export default function WatchStudioViewport({
         });
 
         const link = document.createElement('a');
-        link.download = `${activeWatch.brand.toLowerCase()}-${activeWatch.id}-spec-card.png`;
+        link.download = `${brandSlug}-${activeWatch.id}-spec-card.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
         showToast('Boutique Spec Card Exported (PNG)');
@@ -797,7 +1047,7 @@ export default function WatchStudioViewport({
         return;
       }
       const link = document.createElement('a');
-      link.download = `${activeWatch.brand.toLowerCase()}-${activeWatch.id}-360.webm`;
+      link.download = `${brandSlug}-${activeWatch.id}-360.webm`;
       link.href = blobUrl;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
@@ -931,6 +1181,8 @@ export default function WatchStudioViewport({
             isLightBackdrop ? 'text-[#7A5912]' : 'text-[#D4AF37]'
           }`}
         >
+          <span>{activeWatch.brand}</span>
+          <span aria-hidden="true">·</span>
           <span>{activeWatch.collection}</span>
           <span aria-hidden="true">·</span>
           <span className="font-mono tabular-nums">Ref. {activeWatch.reference}</span>
@@ -950,8 +1202,8 @@ export default function WatchStudioViewport({
           }`}
         >
           {activeWatch.caseDiameterMm} mm · {activeAlloy.label} · {activeDial.label}
-          {hasCerachromBezel ? ` · ${activeBezel.label}` : ''} · {activeBeltLabel} ·{' '}
-          {activeWatch.caliber}
+          {hasCerachromBezel ? ` · ${activeBezel.label}` : ''} · {activeBeltLabel}
+          {beltId !== 'bracelet' ? ` (${activeBeltShade.label})` : ''} · {activeWatch.caliber}
         </p>
         {(activeWatch.hasPowerReserveHand ||
           xrayDial ||
@@ -974,8 +1226,8 @@ export default function WatchStudioViewport({
               isLightBackdrop ? 'text-[#006039]' : 'text-[#F4E2A6]'
             }`}
           >
-            Side-by-Side Split: vs. {compareWatch.name} ({compareWatch.caseDiameterMm} mm ·{' '}
-            {compareWatch.caliber})
+            Side-by-Side Split: vs. {compareWatch.brand} {compareWatch.shortName} (
+            {compareWatch.caseDiameterMm} mm · {compareWatch.caliber})
           </p>
         )}
         <p
@@ -1027,37 +1279,73 @@ export default function WatchStudioViewport({
                 : 'translateY(calc(100% - 34px))',
           }}
         >
-          {/* Side-by-Side Split Compare Companion Strip */}
+          {/* Side-by-Side Split Compare Companion Strip + Curated Collector Showdowns */}
           {compareModelId && isDockVisible && (
             <div className="mb-2 flex justify-center">
-              <div className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-md border border-[#D4AF37]/45 bg-[#101513]/95 px-3 py-1.5 text-xs shadow-lg">
-                <span className="font-mono text-[10px] tracking-wider text-[#D4AF37] uppercase">
-                  Compare With
-                </span>
-                <div className="flex flex-wrap items-center gap-1">
-                  {WATCH_MODELS.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setCompareModelId(m.id)}
-                      className={`cursor-pointer rounded px-2 py-0.5 text-[11px] font-medium transition-colors whitespace-nowrap ${
-                        compareModelId === m.id
-                          ? 'bg-[#006039] text-white'
-                          : 'bg-[#0A0D0C] text-[#F4F2ED]/70 hover:text-white'
-                      }`}
-                    >
-                      {m.name}
-                    </button>
-                  ))}
+              <div className="pointer-events-auto flex max-w-full flex-col gap-1.5 rounded-md border border-[#D4AF37]/45 bg-[#101513]/95 px-3 py-2 text-xs shadow-lg">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-1.5">
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="inline-flex items-center gap-1 pr-1 font-mono text-[10px] tracking-wider text-[#D4AF37] uppercase">
+                      <Trophy className="h-3 w-3" />
+                      Showdowns
+                    </span>
+                    {CURATED_SHOWDOWNS.map((s) => {
+                      const activeShowdown =
+                        selectedModel === s.primaryId && compareModelId === s.compareId;
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => {
+                            if (onActivateShowdown) {
+                              onActivateShowdown(s.primaryId, s.compareId);
+                            } else {
+                              onSelectModel(s.primaryId);
+                              onChangeCompareModelId(s.compareId);
+                            }
+                          }}
+                          className={`cursor-pointer rounded border px-2 py-0.5 text-[10px] font-medium transition-colors whitespace-nowrap ${
+                            activeShowdown
+                              ? 'border-[#D4AF37]/70 bg-[#D4AF37]/20 text-[#F4E2A6]'
+                              : 'border-white/10 bg-[#0A0D0C] text-[#F4F2ED]/75 hover:border-[#D4AF37]/40 hover:text-white'
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Close comparison mode"
+                    onClick={() => onChangeCompareModelId(null)}
+                    className="cursor-pointer rounded p-1 text-[#F4F2ED]/60 transition-colors hover:bg-white/10 hover:text-white"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  aria-label="Close comparison mode"
-                  onClick={() => setCompareModelId(null)}
-                  className="cursor-pointer ml-1 rounded p-1 text-[#F4F2ED]/60 transition-colors hover:bg-white/10 hover:text-white"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+                <div className="flex items-start gap-2">
+                  <span className="pt-0.5 font-mono text-[10px] tracking-wider text-[#D4AF37] uppercase shrink-0">
+                    Compare With
+                  </span>
+                  <div className="flex max-h-20 flex-wrap items-center gap-1 overflow-y-auto pr-1">
+                    {WATCH_MODELS.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        title={`${m.brand} — ${m.name}`}
+                        onClick={() => onChangeCompareModelId(m.id)}
+                        className={`cursor-pointer rounded px-2 py-0.5 text-[11px] font-medium transition-colors whitespace-nowrap ${
+                          compareModelId === m.id
+                            ? 'bg-[#006039] text-white'
+                            : 'bg-[#0A0D0C] text-[#F4F2ED]/70 hover:text-white'
+                        }`}
+                      >
+                        {m.shortName}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1101,76 +1389,87 @@ export default function WatchStudioViewport({
             </div>
           )}
 
-          {/* 3-Slot Velvet Watch Box Strip ("My Vault") */}
+          {/* 6-Slot Collector Vault Strip ("Watch Box") */}
           {vaultOpen && isDockVisible && (
             <div className="mb-2 flex justify-center">
               <div className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-2 rounded-md border border-[#D4AF37]/45 bg-[#101513]/95 px-3 py-2 text-xs shadow-lg">
                 <div className="flex items-center gap-1.5 pr-1">
                   <Archive className="h-3.5 w-3.5 text-[#D4AF37]" />
                   <span className="font-mono text-[10px] tracking-wider text-[#D4AF37] uppercase">
-                    Velvet Watch Box
+                    Collector Vault (6)
                   </span>
                 </div>
-                {vaultSlots.map((slot, idx) => {
-                  const slotWatch = slot ? getWatchById(slot.modelId) : null;
-                  return (
-                    <div
-                      key={idx}
-                      className="flex items-center gap-1.5 rounded border border-white/10 bg-[#0A0D0C] px-2 py-1"
-                    >
-                      <span className="font-mono text-[10px] text-[#D4AF37]">
-                        #{idx + 1}
-                      </span>
-                      {slot && slotWatch ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => handleLoadVaultSlot(slot)}
-                            className="cursor-pointer text-left text-[11px] font-medium text-[#F4F2ED] hover:text-[#F4E2A6]"
-                            title={`Load ${slotWatch.name} (${slot.savedAt})`}
-                          >
-                            {slotWatch.name}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setCompareModelId(slot.modelId)}
-                            className="cursor-pointer rounded border border-white/15 px-1.5 py-0.5 font-mono text-[10px] text-[#F4F2ED]/75 hover:border-[#D4AF37]/50 hover:text-white"
-                            title="Compare against this saved slot"
-                          >
-                            Vs
-                          </button>
+                <div className="flex max-h-28 flex-wrap items-center justify-center gap-1.5 overflow-y-auto pr-1">
+                  {vaultSlots.map((slot, idx) => {
+                    const slotWatch = slot ? getWatchById(slot.modelId) : null;
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-1.5 rounded border border-white/10 bg-[#0A0D0C] px-2 py-1"
+                      >
+                        <span className="font-mono text-[10px] text-[#D4AF37]">
+                          #{idx + 1}
+                        </span>
+                        {slot && slotWatch ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleLoadVaultSlot(slot)}
+                              className="cursor-pointer text-left text-[11px] font-medium text-[#F4F2ED] hover:text-[#F4E2A6]"
+                              title={`Load ${slotWatch.brand} ${slotWatch.name} (${slot.savedAt})`}
+                            >
+                              {slotWatch.brand} · {slotWatch.shortName}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onChangeCompareModelId(slot.modelId)}
+                              className="cursor-pointer rounded border border-white/15 px-1.5 py-0.5 font-mono text-[10px] text-[#F4F2ED]/75 hover:border-[#D4AF37]/50 hover:text-white"
+                              title="Compare against this saved slot"
+                            >
+                              Vs
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyShareUrl(slot)}
+                              className="cursor-pointer rounded p-0.5 text-[#F4F2ED]/60 hover:text-[#D4AF37]"
+                              title="Copy Share Link for this build"
+                              aria-label={`Copy share link for slot ${idx + 1}`}
+                            >
+                              <Link2 className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSaveVaultSlot(idx)}
+                              className="cursor-pointer rounded border border-[#D4AF37]/30 px-1.5 py-0.5 font-mono text-[10px] text-[#F4E2A6] hover:bg-[#D4AF37]/15"
+                              title="Overwrite this slot with current spec"
+                            >
+                              Overwrite
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Clear slot ${idx + 1}`}
+                              onClick={() => handleClearVaultSlot(idx)}
+                              className="cursor-pointer rounded p-0.5 text-[#F4F2ED]/50 hover:text-red-300"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </>
+                        ) : (
                           <button
                             type="button"
                             onClick={() => handleSaveVaultSlot(idx)}
-                            className="cursor-pointer rounded border border-[#D4AF37]/30 px-1.5 py-0.5 font-mono text-[10px] text-[#F4E2A6] hover:bg-[#D4AF37]/15"
-                            title="Overwrite this slot with current spec"
+                            className="cursor-pointer rounded border border-[#D4AF37]/35 bg-[#D4AF37]/10 px-2 py-0.5 font-mono text-[10px] text-[#F4E2A6] hover:bg-[#D4AF37]/20"
                           >
-                            Overwrite
+                            + Save Current
                           </button>
-                          <button
-                            type="button"
-                            aria-label={`Clear slot ${idx + 1}`}
-                            onClick={() => handleClearVaultSlot(idx)}
-                            className="cursor-pointer rounded p-0.5 text-[#F4F2ED]/50 hover:text-red-300"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleSaveVaultSlot(idx)}
-                          className="cursor-pointer rounded border border-[#D4AF37]/35 bg-[#D4AF37]/10 px-2 py-0.5 font-mono text-[10px] text-[#F4E2A6] hover:bg-[#D4AF37]/20"
-                        >
-                          + Save Current
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
                 <button
                   type="button"
-                  aria-label="Close velvet watch box"
+                  aria-label="Close collector vault"
                   onClick={() => setVaultOpen(false)}
                   className="cursor-pointer rounded p-1 text-[#F4F2ED]/60 hover:bg-white/10 hover:text-white"
                 >
@@ -1180,22 +1479,23 @@ export default function WatchStudioViewport({
             </div>
           )}
 
-          {/* Glidelock Clasp Micro-Adjustment Strip */}
+          {/* Clasp Micro-Adjustment Strip */}
           {claspOpen && beltId !== 'leather' && isDockVisible && (
             <div className="mb-2 flex justify-center">
               <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-3 rounded-md border border-[#D4AF37]/45 bg-[#101513]/95 px-3.5 py-1.5 text-xs shadow-lg">
                 <span className="font-mono text-[11px] tracking-wider text-[#D4AF37] uppercase">
-                  Glidelock Extension · +{glidelockMm} mm
+                  {activeWatch.brand === 'ROLEX' ? 'Glidelock Extension' : 'Clasp Micro-Adjust'} · +
+                  {glidelockMm} mm
                 </span>
                 <input
-                  aria-label="Glidelock micro-adjustment millimeters"
+                  aria-label="Clasp micro-adjustment millimeters"
                   type="range"
                   min={0}
                   max={20}
                   step={2}
                   value={glidelockMm}
                   onChange={(e) => setGlidelockMm(parseInt(e.target.value, 10))}
-                  className="rolex-slider w-32"
+                  className="horology-slider w-32"
                 />
                 <button
                   type="button"
@@ -1226,6 +1526,72 @@ export default function WatchStudioViewport({
             </div>
           )}
 
+          {/* Interactive Bezel Telemetry Strip (Navitimer E6B Flight Computer · Dive Elapsed · GMT Zone) */}
+          {hasInteractiveBezel && isDockVisible && (
+            <div className="mb-2 flex justify-center">
+              <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-md border border-white/15 bg-[#101513]/95 px-3 py-1 text-xs shadow-lg">
+                <Compass className="h-3.5 w-3.5 text-[#D4AF37]" />
+                {activeWatch.bezelType === 'navitimer' ? (
+                  <>
+                    <span className="font-mono text-[10px] tracking-wider text-[#D4AF37] uppercase">
+                      E6B Slide Rule
+                    </span>
+                    <span className="rounded border border-[#D4AF37]/35 bg-[#0A0D0C] px-2 py-0.5 font-mono text-[10px] tabular-nums text-[#F4E2A6]">
+                      {Math.pow(10, bezelAngleDeg / 360).toFixed(2)}× ·{' '}
+                      {Math.round(180 * Math.pow(10, bezelAngleDeg / 360))} km/h GS
+                    </span>
+                  </>
+                ) : activeWatch.bezelType === 'gmt-cerachrom' ? (
+                  <>
+                    <span className="font-mono text-[10px] tracking-wider text-[#D4AF37] uppercase">
+                      Bezel 3rd Zone
+                    </span>
+                    <span className="rounded border border-[#D4AF37]/35 bg-[#0A0D0C] px-2 py-0.5 font-mono text-[10px] tabular-nums text-[#F4E2A6]">
+                      {(() => {
+                        const hrs = Math.round(bezelAngleDeg / 15) % 24;
+                        return hrs === 0 ? 'UTC ±0h' : `+${hrs}h Offset`;
+                      })()}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-mono text-[10px] tracking-wider text-[#D4AF37] uppercase">
+                      Dive Bezel
+                    </span>
+                    <span className="rounded border border-[#D4AF37]/35 bg-[#0A0D0C] px-2 py-0.5 font-mono text-[10px] tabular-nums text-[#F4E2A6]">
+                      +{Math.round((bezelAngleDeg / 360) * 60) % 60} min Elapsed
+                    </span>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => engineRef.current?.rotateBezelStep(-1)}
+                  className="cursor-pointer rounded border border-white/15 bg-[#0A0D0C] px-2 py-0.5 font-mono text-[10px] text-[#F4F2ED]/80 hover:border-[#D4AF37]/50 hover:text-white"
+                  title="Step Bezel Back"
+                >
+                  -1 Click
+                </button>
+                <button
+                  type="button"
+                  onClick={() => engineRef.current?.rotateBezelStep(1)}
+                  className="cursor-pointer rounded border border-white/15 bg-[#0A0D0C] px-2 py-0.5 font-mono text-[10px] text-[#F4F2ED]/80 hover:border-[#D4AF37]/50 hover:text-white"
+                  title="Advance Bezel Forward"
+                >
+                  +1 Click
+                </button>
+                {bezelAngleDeg !== 0 && (
+                  <button
+                    type="button"
+                    onClick={() => engineRef.current?.resetBezel()}
+                    className="cursor-pointer rounded border border-white/10 bg-[#0A0D0C] px-2 py-0.5 font-mono text-[10px] text-[#F4E2A6] hover:border-[#D4AF37]/50"
+                  >
+                    Zero 12h
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Wrist Try-On Sizing & Rotor Impulse Strip */}
           {wristMode && isDockVisible && (
             <div className="mb-2 flex justify-center">
@@ -1241,7 +1607,7 @@ export default function WatchStudioViewport({
                   step={1}
                   value={wristMm}
                   onChange={(e) => setWristMm(parseInt(e.target.value, 10))}
-                  className="rolex-slider w-32"
+                  className="horology-slider w-32"
                 />
                 <span className="rounded border border-white/15 bg-[#0A0D0C] px-2 py-0.5 font-mono text-[10px] text-[#F4E2A6]">
                   {lugToLugMm} mm L2L · {wristFitLabel}
@@ -1334,7 +1700,7 @@ export default function WatchStudioViewport({
                     setManualTimeMin(m);
                     engineRef.current?.setManualTimeOffsetMinutes(m);
                   }}
-                  className="rolex-slider w-32"
+                  className="horology-slider w-32"
                 />
                 <div className="flex items-center gap-1">
                   <button
@@ -1404,6 +1770,104 @@ export default function WatchStudioViewport({
             </div>
           )}
 
+          {/* Choreographed Atelier Guided Tour Strip */}
+          {tourActive && currentTourStep && isDockVisible && (
+            <div className="mb-2 flex justify-center">
+              <div className="pointer-events-auto flex w-full max-w-3xl flex-col gap-2 rounded-md border border-[#D4AF37]/50 bg-[#101513]/95 px-4 py-2.5 text-xs shadow-xl">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <BookOpen className="h-3.5 w-3.5 text-[#D4AF37]" />
+                    <span className="font-mono text-[10px] tracking-[0.16em] text-[#D4AF37] uppercase">
+                      {currentTourStep.chapter}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {tourSteps.map((step, idx) => (
+                      <button
+                        key={step.id}
+                        type="button"
+                        onClick={() => handleSelectTourStep(idx)}
+                        className={`cursor-pointer rounded border px-2 py-0.5 font-mono text-[10px] transition-colors ${
+                          idx === tourStepIdx
+                            ? 'border-[#D4AF37] bg-[#D4AF37]/20 text-[#F4E2A6]'
+                            : 'border-white/10 bg-[#0A0D0C] text-[#F4F2ED]/55 hover:border-[#D4AF37]/40 hover:text-white'
+                        }`}
+                      >
+                        0{idx + 1}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="font-serif text-sm font-medium text-[#F4F2ED]">
+                      {currentTourStep.title}
+                    </p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-[#F4F2ED]/75">
+                      {currentTourStep.detail}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      disabled={tourStepIdx === 0}
+                      onClick={() => handleSelectTourStep(tourStepIdx - 1)}
+                      aria-label="Previous tour chapter"
+                      className="cursor-pointer rounded border border-white/15 bg-[#0A0D0C] p-1.5 text-[#F4F2ED]/80 transition-colors hover:border-[#D4AF37]/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTourAutoPlay((v) => !v)}
+                      className={`cursor-pointer flex items-center gap-1 rounded border px-2.5 py-1 font-mono text-[10px] uppercase transition-colors ${
+                        tourAutoPlay
+                          ? 'border-[#D4AF37]/70 bg-[#D4AF37]/20 text-[#F4E2A6]'
+                          : 'border-white/15 bg-[#0A0D0C] text-[#F4F2ED]/80 hover:border-[#D4AF37]/50 hover:text-white'
+                      }`}
+                    >
+                      {tourAutoPlay ? (
+                        <>
+                          <Pause className="h-3 w-3" />
+                          <span>Pause</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-3 w-3" />
+                          <span>Auto</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (tourStepIdx >= tourSteps.length - 1) {
+                          handleExitTour();
+                        } else {
+                          handleSelectTourStep(tourStepIdx + 1);
+                        }
+                      }}
+                      className="cursor-pointer flex items-center gap-1 rounded bg-[#006039] px-2.5 py-1 font-mono text-[10px] font-medium uppercase text-white transition-colors hover:bg-[#007547]"
+                    >
+                      <span>{tourStepIdx >= tourSteps.length - 1 ? 'Finish' : 'Next'}</span>
+                      <ChevronRight className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Close guided tour"
+                      onClick={handleExitTour}
+                      className="cursor-pointer rounded p-1.5 text-[#F4F2ED]/60 transition-colors hover:bg-white/10 hover:text-white"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Active Detail Tour Caption Strip */}
           {activeHotspot && isDockVisible && (
             <div className="mb-2 flex justify-center">
@@ -1458,24 +1922,29 @@ export default function WatchStudioViewport({
               isLightBackdrop ? 'border-black/25' : 'border-white/15'
             }`}
           >
-            {/* Mobile-only Category & Model Switcher */}
-            <div className="mb-2 flex items-center gap-1.5 overflow-x-auto border-b border-white/10 pb-2 md:hidden">
+            {/* Mobile-only Collection Pillar & Model Switcher */}
+            <div className="mb-2 flex items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-b border-white/10 pb-2 md:hidden">
+              <button
+                type="button"
+                onClick={onOpenCatalog}
+                className="cursor-pointer flex items-center gap-1 rounded border border-[#D4AF37]/40 bg-[#0A0D0C] px-2 py-1 text-[10px] font-medium uppercase text-[#F4E2A6] whitespace-nowrap shrink-0"
+              >
+                <LayoutGrid className="h-3 w-3" />
+                <span>All</span>
+              </button>
               <div className="flex items-center rounded border border-white/10 bg-[#0A0D0C] p-0.5 shrink-0">
                 {WATCH_CATEGORIES.map((cat) => (
                   <button
                     key={cat.id}
                     type="button"
                     onClick={() => handleMobileCategorySwitch(cat.id)}
-                    className={`cursor-pointer flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-medium uppercase whitespace-nowrap ${
+                    className={`cursor-pointer rounded px-2 py-0.5 text-[10px] font-medium uppercase whitespace-nowrap ${
                       activeWatch.category === cat.id
-                        ? cat.id === 'others'
-                          ? 'bg-[#8A6818] text-white'
-                          : 'bg-[#006039] text-white'
+                        ? 'bg-[#006039] text-white'
                         : 'text-[#F4F2ED]/60'
                     }`}
                   >
-                    {cat.id === 'others' && <Watch className="h-2.5 w-2.5" />}
-                    <span>{cat.label}</span>
+                    {cat.shortLabel}
                   </button>
                 ))}
               </div>
@@ -1492,7 +1961,7 @@ export default function WatchStudioViewport({
                         : 'text-[#F4F2ED]/70 hover:bg-white/5 hover:text-white'
                     }`}
                   >
-                    {w.name}
+                    {w.shortName}
                   </button>
                 );
               })}
@@ -1628,8 +2097,22 @@ export default function WatchStudioViewport({
 
                 <button
                   type="button"
+                  onClick={handleToggleTour}
+                  title="Choreographed 4-Chapter Atelier Guided Tour"
+                  className={`cursor-pointer flex items-center gap-1 rounded border px-2 py-1.5 text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
+                    tourActive
+                      ? 'border-[#D4AF37]/70 bg-[#D4AF37]/20 text-[#F4E2A6]'
+                      : 'border-white/10 bg-[#0A0D0C] text-[#F4F2ED]/80 hover:border-[#D4AF37]/45 hover:text-[#F4E2A6]'
+                  }`}
+                >
+                  <BookOpen className="h-3.5 w-3.5 text-[#D4AF37]" />
+                  <span className="hidden sm:inline">Tour</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setVaultOpen((v) => !v)}
-                  title="3-Slot Velvet Watch Box (Save, Load & Compare Specs)"
+                  title="6-Slot Collector Vault (Save, Load & Compare Specs)"
                   className={`cursor-pointer flex items-center gap-1 rounded border px-2 py-1.5 text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
                     vaultOpen
                       ? 'border-[#D4AF37]/60 bg-[#D4AF37]/15 text-[#F4E2A6]'
@@ -1844,6 +2327,16 @@ export default function WatchStudioViewport({
 
                 <button
                   type="button"
+                  onClick={() => handleCopyShareUrl()}
+                  title="Copy Shareable Configuration Link"
+                  aria-label="Copy Shareable Build Link"
+                  className="cursor-pointer flex items-center gap-1 rounded border border-white/10 bg-[#0A0D0C] px-2 py-1.5 text-[11px] font-medium text-[#F4F2ED]/75 transition-colors hover:border-[#D4AF37]/60 hover:text-[#F4E2A6] whitespace-nowrap shrink-0"
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleSnapshot}
                   title="Capture Studio Still (PNG)"
                   aria-label="Capture Studio Still"
@@ -1879,7 +2372,7 @@ export default function WatchStudioViewport({
               </div>
             </div>
 
-            {/* Row 2: Alloy · Dial · Cerachrom Bezel · GMT/24h Zone · Belt · Explode */}
+            {/* Row 2: Alloy · Dial · Cerachrom Bezel · GMT/24h Zone · Belt & Shade · Explode */}
             <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 xl:justify-between">
               <div className="flex items-center gap-1.5">
                 <span className="text-[11px] font-medium tracking-wider text-[#F4F2ED]/55 uppercase whitespace-nowrap">
@@ -1888,22 +2381,26 @@ export default function WatchStudioViewport({
                 <div className="flex items-center gap-1.5">
                   {ALLOY_OPTIONS.map((alloy) => {
                     const active = alloyId === alloy.id;
+                    const resolved = resolveAlloy(activeWatch, alloy.id);
+                    const isAuthentic = alloy.id === activeWatch.defaultAlloy || alloy.id === 'default';
                     return (
                       <button
                         key={alloy.id}
                         type="button"
-                        title={alloy.label}
-                        aria-label={`Alloy: ${alloy.label}`}
+                        title={`${resolved.label}${isAuthentic ? ' (Maison Authentic)' : ''}`}
+                        aria-label={`Alloy: ${resolved.label}`}
                         onClick={() => onChangeAlloyId(alloy.id)}
                         className={`cursor-pointer relative h-4.5 w-4.5 rounded-full border transition-transform hover:scale-110 focus-visible:outline-2 focus-visible:outline-[#D4AF37] ${
                           active
                             ? 'border-[#D4AF37] ring-2 ring-[#D4AF37]/40 scale-105'
-                            : 'border-white/25'
+                            : isAuthentic
+                              ? 'border-[#D4AF37]/55'
+                              : 'border-white/25'
                         }`}
                         style={{
-                          background: alloy.secondaryHex
-                            ? `linear-gradient(135deg, ${alloy.swatchHex} 50%, ${alloy.secondaryHex} 50%)`
-                            : alloy.swatchHex,
+                          background: resolved.secondaryHex
+                            ? `linear-gradient(135deg, ${resolved.swatchHex} 50%, ${resolved.secondaryHex} 50%)`
+                            : resolved.swatchHex,
                         }}
                       />
                     );
@@ -1918,19 +2415,23 @@ export default function WatchStudioViewport({
                 <div className="flex items-center gap-1.5">
                   {DIAL_OPTIONS.map((dial) => {
                     const active = dialId === dial.id;
+                    const resolved = resolveDial(activeWatch, dial.id);
+                    const isAuthentic = dial.id === activeWatch.defaultDial || dial.id === 'default';
                     return (
                       <button
                         key={dial.id}
                         type="button"
-                        title={dial.label}
-                        aria-label={`Dial: ${dial.label}`}
+                        title={`${resolved.label}${isAuthentic ? ' (Maison Authentic)' : ''}`}
+                        aria-label={`Dial: ${resolved.label}`}
                         onClick={() => onChangeDialId(dial.id)}
                         className={`cursor-pointer h-4.5 w-4.5 rounded-full border transition-transform hover:scale-110 focus-visible:outline-2 focus-visible:outline-[#D4AF37] ${
                           active
                             ? 'border-[#D4AF37] ring-2 ring-[#D4AF37]/40 scale-105'
-                            : 'border-white/25'
+                            : isAuthentic
+                              ? 'border-[#D4AF37]/55'
+                              : 'border-white/25'
                         }`}
-                        style={{ backgroundColor: dial.swatchHex }}
+                        style={{ backgroundColor: resolved.swatchHex }}
                       />
                     );
                   })}
@@ -2000,21 +2501,47 @@ export default function WatchStudioViewport({
                 </div>
               )}
 
-              <div className="flex items-center gap-1 rounded border border-white/10 bg-[#0A0D0C] p-0.5">
-                {BELT_OPTIONS.map((belt) => (
-                  <button
-                    key={belt.id}
-                    type="button"
-                    onClick={() => onChangeBeltId(belt.id)}
-                    className={`cursor-pointer rounded px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
-                      beltId === belt.id
-                        ? 'bg-[#006039] text-white'
-                        : 'text-[#F4F2ED]/60 hover:text-white'
-                    }`}
-                  >
-                    {belt.label}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 rounded border border-white/10 bg-[#0A0D0C] p-0.5">
+                  {BELT_OPTIONS.map((belt) => (
+                    <button
+                      key={belt.id}
+                      type="button"
+                      onClick={() => onChangeBeltId(belt.id)}
+                      className={`cursor-pointer rounded px-2.5 py-1 text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
+                        beltId === belt.id
+                          ? 'bg-[#006039] text-white'
+                          : 'text-[#F4F2ED]/60 hover:text-white'
+                      }`}
+                    >
+                      {getShortBeltTabLabel(activeWatch, belt.id)}
+                    </button>
+                  ))}
+                </div>
+
+                {beltId !== 'bracelet' && (
+                  <div className="flex items-center gap-1" title="Strap Colorway">
+                    {BELT_SHADE_OPTIONS.map((shade) => {
+                      const resolvedShade = resolveBeltShade(activeWatch, shade.id);
+                      const active = beltShadeId === shade.id;
+                      return (
+                        <button
+                          key={shade.id}
+                          type="button"
+                          title={`Strap: ${shade.id === 'default' ? `Signature (${resolvedShade.label})` : shade.label}`}
+                          aria-label={`Strap Color: ${shade.label}`}
+                          onClick={() => onChangeBeltShadeId(shade.id)}
+                          className={`cursor-pointer h-4 w-4 rounded-full border transition-transform hover:scale-110 ${
+                            active
+                              ? 'border-[#D4AF37] ring-2 ring-[#D4AF37]/40 scale-105'
+                              : 'border-white/25'
+                          }`}
+                          style={{ backgroundColor: resolvedShade.swatchHex }}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {activeWatch.supportsPatina && (
@@ -2033,7 +2560,7 @@ export default function WatchStudioViewport({
                     step={0.01}
                     value={patina}
                     onChange={(e) => setPatina(parseFloat(e.target.value))}
-                    className="rolex-slider w-full"
+                    className="horology-slider w-full"
                   />
                   <span className="w-8 text-right font-mono text-[11px] tabular-nums text-[#F4F2ED]/75">
                     {Math.round(patina * 100)}%
@@ -2057,7 +2584,7 @@ export default function WatchStudioViewport({
                   step={0.01}
                   value={explode}
                   onChange={(e) => setExplode(parseFloat(e.target.value))}
-                  className="rolex-slider w-full"
+                  className="horology-slider w-full"
                 />
                 <span className="w-8 text-right font-mono text-[11px] tabular-nums text-[#F4F2ED]/75">
                   {Math.round(explode * 100)}%

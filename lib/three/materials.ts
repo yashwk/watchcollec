@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { AlloyOption, LightingModeId } from '@/lib/watches';
+import { AlloyOption, BeltShadeOption, LightingModeId, LumePalette } from '@/lib/watches';
 import {
   createAlligatorLeatherTextures,
   createBrushedMetalBumpTexture,
@@ -17,6 +17,7 @@ export interface WatchMaterialSet {
   dialSurface: THREE.MeshStandardMaterial;
   sapphireCrystal: THREE.MeshPhysicalMaterial;
   chromalightLume: THREE.MeshStandardMaterial;
+  secondaryLume: THREE.MeshStandardMaterial;
   handMetal: THREE.MeshPhysicalMaterial;
   bluedHands: THREE.MeshPhysicalMaterial;
   crimsonAccent: THREE.MeshPhysicalMaterial;
@@ -79,12 +80,47 @@ export function applyAlloyToMaterialSet(
   );
 }
 
+export function applyBeltShadeToMaterialSet(
+  mats: WatchMaterialSet,
+  shade: BeltShadeOption
+) {
+  mats.leatherBelt.color.setHex(shade.leatherHex);
+  if (mats.leatherBelt.sheenColor) {
+    mats.leatherBelt.sheenColor.setHex(shade.sheenHex);
+  }
+  mats.leatherStitch.color.setHex(shade.stitchHex);
+  mats.oysterflexBelt.color.setHex(shade.rubberHex);
+}
+
+export function applyLumePaletteToMaterialSet(
+  mats: WatchMaterialSet,
+  lume: LumePalette | undefined,
+  nocturne: boolean,
+  charge = 0
+) {
+  const intensity = nocturne ? 0.72 + charge * 0.62 : 0.06;
+  const pLit = lume?.primaryLitHex ?? 0x7dd3fc;
+  const pEm = lume?.primaryEmissiveHex ?? 0x0ea5e9;
+  const sLit = lume?.secondaryLitHex ?? pLit;
+  const sEm = lume?.secondaryEmissiveHex ?? pEm;
+
+  mats.chromalightLume.color.setHex(nocturne ? pLit : 0xf2f6f9);
+  mats.chromalightLume.emissive.setHex(pEm);
+  mats.chromalightLume.emissiveIntensity = intensity;
+
+  mats.secondaryLume.color.setHex(nocturne ? sLit : 0xf2f6f9);
+  mats.secondaryLume.emissive.setHex(sEm);
+  mats.secondaryLume.emissiveIntensity = intensity;
+}
+
 export function createWatchMaterialSet(
   alloy: AlloyOption,
   isSoftwareGl: boolean,
   lightingMode: LightingModeId,
   maxAnisotropy = 4,
-  patina = 0
+  patina = 0,
+  beltShade?: BeltShadeOption,
+  lumePalette?: LumePalette
 ): WatchMaterialSet {
   const brushedBump = createBrushedMetalBumpTexture();
   const leatherTex = createAlligatorLeatherTextures(maxAnisotropy);
@@ -155,7 +191,7 @@ export function createWatchMaterialSet(
   });
 
   const sapphireCrystal = new THREE.MeshPhysicalMaterial({
-    color: 0xf4f8ff,
+    color: lumePalette?.arCrystalTintHex ?? 0xf4f8ff,
     metalness: 0.0,
     roughness: 0.012,
     transmission: 0,
@@ -175,8 +211,16 @@ export function createWatchMaterialSet(
 
   const isNocturne = lightingMode === 'nocturne';
   const chromalightLume = new THREE.MeshStandardMaterial({
-    color: isNocturne ? 0x7dd3fc : 0xf2f6f9,
-    emissive: 0x0ea5e9,
+    color: isNocturne ? (lumePalette?.primaryLitHex ?? 0x7dd3fc) : 0xf2f6f9,
+    emissive: lumePalette?.primaryEmissiveHex ?? 0x0ea5e9,
+    emissiveIntensity: isNocturne ? 0.78 : 0.06,
+    roughness: 0.38,
+    metalness: 0.04,
+  });
+
+  const secondaryLume = new THREE.MeshStandardMaterial({
+    color: isNocturne ? (lumePalette?.secondaryLitHex ?? 0x7dd3fc) : 0xf2f6f9,
+    emissive: lumePalette?.secondaryEmissiveHex ?? 0x0ea5e9,
     emissiveIntensity: isNocturne ? 0.78 : 0.06,
     roughness: 0.38,
     metalness: 0.04,
@@ -361,6 +405,7 @@ export function createWatchMaterialSet(
     dialSurface,
     sapphireCrystal,
     chromalightLume,
+    secondaryLume,
     handMetal,
     bluedHands,
     crimsonAccent,
@@ -388,6 +433,7 @@ export function createWatchMaterialSet(
       dialSurface,
       sapphireCrystal,
       chromalightLume,
+      secondaryLume,
       handMetal,
       bluedHands,
       crimsonAccent,
@@ -410,6 +456,9 @@ export function createWatchMaterialSet(
 
   if (patina > 0) {
     applyAlloyToMaterialSet(set, alloy, patina);
+  }
+  if (beltShade) {
+    applyBeltShadeToMaterialSet(set, beltShade);
   }
   return set;
 }

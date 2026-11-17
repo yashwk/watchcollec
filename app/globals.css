@@ -20,7 +20,7 @@ body {
 }
 
 /* Precision horology range slider */
-input[type="range"].rolex-slider {
+input[type="range"].horology-slider {
   -webkit-appearance: none;
   appearance: none;
   height: 3px;
@@ -29,7 +29,7 @@ input[type="range"].rolex-slider {
   outline: none;
 }
 
-input[type="range"].rolex-slider::-webkit-slider-thumb {
+input[type="range"].horology-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 14px;
@@ -41,11 +41,11 @@ input[type="range"].rolex-slider::-webkit-slider-thumb {
   transition: transform 0.15s ease;
 }
 
-input[type="range"].rolex-slider::-webkit-slider-thumb:hover {
+input[type="range"].horology-slider::-webkit-slider-thumb:hover {
   transform: scale(1.18);
 }
 
-input[type="range"].rolex-slider::-moz-range-thumb {
+input[type="range"].horology-slider::-moz-range-thumb {
   width: 14px;
   height: 14px;
   border-radius: 50%;

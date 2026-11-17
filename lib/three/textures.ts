@@ -227,6 +227,46 @@ export function createDialTexture(
         i % 2 === 0 ? 'rgba(255,255,255,0.32)' : 'rgba(165, 178, 195, 0.14)';
       ctx.fillRect(gx, gy, w, 2);
     }
+  } else if (watch.id === 'breguet-classique') {
+    // Classic engine-turned Clous de Paris hobnail guilloche center field
+    const pitch = 16;
+    for (let y = 0; y < logicalSize; y += pitch) {
+      for (let x = 0; x < logicalSize; x += pitch) {
+        const dx = x + pitch * 0.5 - cx;
+        const dy = y + pitch * 0.5 - cy;
+        if (Math.hypot(dx, dy) < radius * 0.68) {
+          const g = ctx.createLinearGradient(x, y, x + pitch, y + pitch);
+          g.addColorStop(0, 'rgba(255,255,255,0.45)');
+          g.addColorStop(0.5, 'rgba(180,175,165,0.08)');
+          g.addColorStop(1, 'rgba(60,55,48,0.22)');
+          ctx.fillStyle = g;
+          ctx.fillRect(x, y, pitch - 1, pitch - 1);
+        }
+      }
+    }
+  } else if (watch.id === 'omega-seamaster') {
+    // Laser-engraved ZrO2 sinusoidal wave pattern across dial center
+    ctx.save();
+    ctx.strokeStyle = dial.lightText ? 'rgba(255,255,255,0.16)' : 'rgba(10,20,35,0.16)';
+    ctx.lineWidth = 4.5;
+    for (let wy = cy - radius * 0.78; wy <= cy + radius * 0.78; wy += 48) {
+      ctx.beginPath();
+      for (let wx = cx - radius * 0.88; wx <= cx + radius * 0.88; wx += 8) {
+        const yOff = Math.sin((wx - cx) * 0.036) * 14;
+        if (wx === cx - radius * 0.88) ctx.moveTo(wx, wy + yOff);
+        else ctx.lineTo(wx, wy + yOff);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  } else if (watch.id === 'tudor-bb58' || watch.id === 'panerai-luminor') {
+    // Matte micro-grained vintage diver / Marina Militare texture
+    for (let i = 0; i < 4200; i++) {
+      const gx = (i * 197) % logicalSize;
+      const gy = (i * 311) % logicalSize;
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.028)' : 'rgba(0,0,0,0.06)';
+      ctx.fillRect(gx, gy, 2, 2);
+    }
   } else if (dial.sunburst) {
     ctx.save();
     ctx.translate(cx, cy);
@@ -1085,6 +1125,746 @@ export function createDialTexture(
     return rmTex;
   }
 
+  if (watch.id === 'vc-overseas') {
+    ctx.save();
+    ctx.translate(cx, cy);
+    // Double velvet-blue outer seconds & minute chapter track
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+    ctx.lineWidth = 34;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.9, 0, Math.PI * 2);
+    ctx.stroke();
+    for (let i = 0; i < 60; i++) {
+      const a = (i / 60) * Math.PI * 2 - Math.PI / 2;
+      const maj = i % 5 === 0;
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = maj ? 3.2 : 1.5;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * radius * (maj ? 0.855 : 0.885), Math.sin(a) * radius * (maj ? 0.855 : 0.885));
+      ctx.lineTo(Math.cos(a) * radius * 0.94, Math.sin(a) * radius * 0.94);
+      ctx.stroke();
+    }
+
+    // 12 o'clock Maltese Cross emblem
+    ctx.save();
+    ctx.translate(0, -188);
+    ctx.fillStyle = '#E5E8EC';
+    for (let k = 0; k < 4; k++) {
+      ctx.save();
+      ctx.rotate((k * Math.PI) / 2);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(-9, -22);
+      ctx.lineTo(0, -16);
+      ctx.lineTo(9, -22);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = ink;
+    ctx.font = '600 22px Georgia, serif';
+    ctx.fillText('VACHERON CONSTANTIN', 0, -138);
+    ctx.fillStyle = mutedInk;
+    ctx.font = '500 15px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('GENEVE', 0, -110);
+    ctx.fillText('AUTOMATIC', 0, 148);
+    ctx.fillText('SWISS MADE', 0, radius * 0.84);
+
+    // 3 o'clock beveled date window
+    const dx = radius * 0.65;
+    ctx.fillStyle = '#F7F6F2';
+    ctx.strokeStyle = '#C9CFD4';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(dx - 38, -28, 76, 56, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#121518';
+    ctx.font = '700 34px "JetBrains Mono", monospace';
+    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2);
+    ctx.restore();
+
+    const vcTex = new THREE.CanvasTexture(canvas);
+    vcTex.colorSpace = THREE.SRGBColorSpace;
+    vcTex.anisotropy = maxAnisotropy;
+    vcTex.needsUpdate = true;
+    return vcTex;
+  }
+
+  if (watch.id === 'omega-seamaster') {
+    ctx.save();
+    ctx.translate(cx, cy);
+    for (let i = 0; i < 60; i++) {
+      const a = (i / 60) * Math.PI * 2 - Math.PI / 2;
+      const maj = i % 5 === 0;
+      ctx.strokeStyle = maj ? ink : mutedInk;
+      ctx.lineWidth = maj ? 3.5 : 1.6;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * radius * (maj ? 0.875 : 0.905), Math.sin(a) * radius * (maj ? 0.875 : 0.905));
+      ctx.lineTo(Math.cos(a) * radius * 0.945, Math.sin(a) * radius * 0.945);
+      ctx.stroke();
+    }
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = ink;
+    ctx.font = '700 30px Georgia, serif';
+    ctx.fillText('Ω', 0, -184);
+    ctx.font = '600 24px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('O M E G A', 0, -146);
+    ctx.fillStyle = '#EF4444';
+    ctx.font = '600 20px Georgia, serif';
+    ctx.fillText('Seamaster', 0, -112);
+
+    ctx.fillStyle = mutedInk;
+    ctx.font = '600 12px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('[ZrO2]', 0, -44);
+    ctx.fillText('CO-AXIAL', 0, 102);
+    ctx.fillText('MASTER CHRONOMETER', 0, 122);
+    ctx.fillText('300m / 1000ft', 0, 144);
+
+    // 6 o'clock trapezoidal date aperture
+    const dy = radius * 0.72;
+    ctx.fillStyle = '#0B172B';
+    ctx.strokeStyle = '#C9CFD4';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(-38, dy - 26);
+    ctx.lineTo(38, dy - 26);
+    ctx.lineTo(30, dy + 26);
+    ctx.lineTo(-30, dy + 26);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#F3F4F6';
+    ctx.font = '700 32px "JetBrains Mono", monospace';
+    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), 0, dy + 1);
+
+    ctx.fillStyle = mutedInk;
+    ctx.font = '500 12px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('SWISS   MADE', 0, radius * 0.87);
+    ctx.restore();
+
+    const smTex = new THREE.CanvasTexture(canvas);
+    smTex.colorSpace = THREE.SRGBColorSpace;
+    smTex.anisotropy = maxAnisotropy;
+    smTex.needsUpdate = true;
+    return smTex;
+  }
+
+  if (watch.id === 'tudor-bb58') {
+    const gilt = '#D6AD66';
+    ctx.save();
+    ctx.translate(cx, cy);
+    // Crisp gilt rose-gold railway chapter track
+    ctx.strokeStyle = gilt;
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.945, 0, Math.PI * 2);
+    ctx.stroke();
+    for (let i = 0; i < 60; i++) {
+      const a = (i / 60) * Math.PI * 2 - Math.PI / 2;
+      const maj = i % 5 === 0;
+      ctx.strokeStyle = gilt;
+      ctx.lineWidth = maj ? 3.5 : 1.7;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * radius * (maj ? 0.885 : 0.91), Math.sin(a) * radius * (maj ? 0.885 : 0.91));
+      ctx.lineTo(Math.cos(a) * radius * 0.945, Math.sin(a) * radius * 0.945);
+      ctx.stroke();
+    }
+
+    // Tudor Shield Emblem
+    ctx.fillStyle = gilt;
+    ctx.beginPath();
+    ctx.moveTo(0, -210);
+    ctx.lineTo(18, -204);
+    ctx.lineTo(15, -180);
+    ctx.lineTo(0, -166);
+    ctx.lineTo(-15, -180);
+    ctx.lineTo(-18, -204);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = gilt;
+    ctx.font = '700 26px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('T U D O R', 0, -142);
+    ctx.font = '500 15px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('GENEVE', 0, -114);
+
+    ctx.fillStyle = gilt;
+    ctx.font = '600 18px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('200m : 660ft', 0, 120);
+    ctx.font = '500 13px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('CHRONOMETER', 0, 146);
+    ctx.fillText('OFFICIALLY CERTIFIED', 0, 166);
+    ctx.font = '500 12px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('SWISS   MADE', 0, radius * 0.84);
+    ctx.restore();
+
+    const tdTex = new THREE.CanvasTexture(canvas);
+    tdTex.colorSpace = THREE.SRGBColorSpace;
+    tdTex.anisotropy = maxAnisotropy;
+    tdTex.needsUpdate = true;
+    return tdTex;
+  }
+
+  if (watch.id === 'panerai-luminor') {
+    const panLume = '#D9ECC9';
+    ctx.save();
+    ctx.translate(cx, cy);
+    // Sandwich dial glowing cut-out numerals (12, 6) + recessed luminous bar slots
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let h = 1; h <= 12; h++) {
+      if (h === 3 || h === 9) continue;
+      const a = (h / 12) * Math.PI * 2 - Math.PI / 2;
+      const rr = radius * 0.74;
+      const hx = Math.cos(a) * rr;
+      const hy = Math.sin(a) * rr;
+      if (h === 12 || h === 6) {
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        ctx.font = '800 72px "Plus Jakarta Sans", Arial, sans-serif';
+        ctx.fillText(String(h), hx, hy + 2);
+        ctx.fillStyle = panLume;
+        ctx.font = '800 66px "Plus Jakarta Sans", Arial, sans-serif';
+        ctx.fillText(String(h), hx, hy);
+      } else {
+        ctx.save();
+        ctx.translate(hx, hy);
+        ctx.rotate(a + Math.PI / 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.85)';
+        ctx.beginPath();
+        ctx.roundRect(-11, -34, 22, 68, 8);
+        ctx.fill();
+        ctx.fillStyle = panLume;
+        ctx.beginPath();
+        ctx.roundRect(-7.5, -29, 15, 58, 6);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // 9 o'clock Small Seconds Sub-Register
+    const sx = -radius * 0.44;
+    ctx.strokeStyle = 'rgba(217, 236, 201, 0.35)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(sx, 0, 76, 0, Math.PI * 2);
+    ctx.stroke();
+    for (let t = 0; t < 12; t++) {
+      const ta = (t / 12) * Math.PI * 2;
+      ctx.strokeStyle = panLume;
+      ctx.lineWidth = t % 3 === 0 ? 4 : 2;
+      ctx.beginPath();
+      ctx.moveTo(sx + Math.cos(ta) * 56, Math.sin(ta) * 56);
+      ctx.lineTo(sx + Math.cos(ta) * 72, Math.sin(ta) * 72);
+      ctx.stroke();
+    }
+
+    // 3 o'clock Date Window
+    const dx = radius * 0.62;
+    ctx.fillStyle = '#0A0B0C';
+    ctx.strokeStyle = '#33383E';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(dx - 38, -28, 76, 56, 6);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = panLume;
+    ctx.font = '700 34px "JetBrains Mono", monospace';
+    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2);
+
+    ctx.fillStyle = ink;
+    ctx.font = '700 22px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('L U M I N O R', 0, -148);
+    ctx.font = '800 26px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('P A N E R A I', 0, -116);
+    ctx.fillStyle = mutedInk;
+    ctx.font = '600 18px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('MARINA', 0, 134);
+    ctx.font = '500 13px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('AUTOMATIC · 300M', 0, 162);
+    ctx.restore();
+
+    const panTex = new THREE.CanvasTexture(canvas);
+    panTex.colorSpace = THREE.SRGBColorSpace;
+    panTex.anisotropy = maxAnisotropy;
+    panTex.needsUpdate = true;
+    return panTex;
+  }
+
+  if (watch.id === 'tag-monaco') {
+    ctx.save();
+    ctx.translate(cx, cy);
+    // Inner circular white minute ring inside square petrol-blue dial
+    ctx.strokeStyle = '#F3F4F6';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.67, 0, Math.PI * 2);
+    ctx.stroke();
+    for (let i = 0; i < 60; i++) {
+      const a = (i / 60) * Math.PI * 2 - Math.PI / 2;
+      const maj = i % 5 === 0;
+      ctx.strokeStyle = maj ? '#F3F4F6' : 'rgba(243,244,246,0.65)';
+      ctx.lineWidth = maj ? 3.5 : 1.6;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * radius * (maj ? 0.61 : 0.64), Math.sin(a) * radius * (maj ? 0.61 : 0.64));
+      ctx.lineTo(Math.cos(a) * radius * 0.67, Math.sin(a) * radius * 0.67);
+      ctx.stroke();
+    }
+
+    // Radial polished + crimson-tipped horizontal Monaco hour batons
+    for (let h = 0; h < 12; h++) {
+      if (h === 3 || h === 6 || h === 9) continue;
+      const a = (h / 12) * Math.PI * 2 - Math.PI / 2;
+      const bx = Math.cos(a) * radius * 0.74;
+      const by = Math.sin(a) * radius * 0.74;
+      ctx.save();
+      ctx.translate(bx, by);
+      ctx.fillStyle = '#E5E7EB';
+      ctx.fillRect(-32, -8, 64, 16);
+      ctx.fillStyle = '#EF4444';
+      ctx.fillRect(Math.cos(a) > 0 ? -32 : 20, -8, 12, 16);
+      ctx.restore();
+    }
+
+    // Twin Rounded-Square Silvered Chrono Subdials (9h & 3h)
+    [
+      { x: -162, y: 0, lbl: 'MIN' },
+      { x: 162, y: 0, lbl: 'SEC' },
+    ].forEach((sub) => {
+      ctx.fillStyle = '#F3F4F6';
+      ctx.strokeStyle = '#9CA3AF';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.roundRect(sub.x - 76, sub.y - 76, 152, 152, 22);
+      ctx.fill();
+      ctx.stroke();
+      for (let t = 0; t < 12; t++) {
+        const ta = (t / 12) * Math.PI * 2 - Math.PI / 2;
+        ctx.strokeStyle = '#181C20';
+        ctx.lineWidth = t % 3 === 0 ? 3 : 1.5;
+        ctx.beginPath();
+        ctx.moveTo(sub.x + Math.cos(ta) * 46, sub.y + Math.sin(ta) * 46);
+        ctx.lineTo(sub.x + Math.cos(ta) * 60, sub.y + Math.sin(ta) * 60);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#181C20';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '700 13px "JetBrains Mono", monospace';
+      ctx.fillText(sub.lbl, sub.x, sub.y + 34);
+    });
+
+    // Classic Heuer shield + MONACO badge
+    ctx.fillStyle = '#F3F4F6';
+    ctx.beginPath();
+    ctx.moveTo(-26, -214);
+    ctx.lineTo(26, -214);
+    ctx.lineTo(22, -178);
+    ctx.lineTo(0, -162);
+    ctx.lineTo(-22, -178);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#14171A';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '800 12px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('HEUER', 0, -190);
+
+    ctx.fillStyle = ink;
+    ctx.font = '700 20px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('MONACO', 0, -134);
+    ctx.fillStyle = mutedInk;
+    ctx.font = '600 12px "JetBrains Mono", monospace';
+    ctx.fillText('CALIBRE 11 · AUTOMATIC', 0, 128);
+
+    // 6 o'clock Date Window
+    const dy = radius * 0.56;
+    ctx.fillStyle = '#F7F6F2';
+    ctx.strokeStyle = '#D1D5DB';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(-34, dy - 24, 68, 48, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#111827';
+    ctx.font = '700 30px "JetBrains Mono", monospace';
+    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), 0, dy + 1);
+    ctx.restore();
+
+    const tagTex = new THREE.CanvasTexture(canvas);
+    tagTex.colorSpace = THREE.SRGBColorSpace;
+    tagTex.anisotropy = maxAnisotropy;
+    tagTex.needsUpdate = true;
+    return tagTex;
+  }
+
+  if (watch.id === 'breitling-navitimer') {
+    ctx.save();
+    ctx.translate(cx, cy);
+    // White circular E6B slide-rule perimeter ring + dense logarithmic graduations
+    ctx.strokeStyle = '#F5F2EA';
+    ctx.lineWidth = 76;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.87, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#B91C1C';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.79, 0, Math.PI * 2);
+    ctx.stroke();
+
+    for (let i = 0; i < 180; i++) {
+      const a = (i / 180) * Math.PI * 2 - Math.PI / 2;
+      const maj = i % 15 === 0;
+      const mid = i % 5 === 0;
+      ctx.strokeStyle = maj ? '#B91C1C' : '#181B20';
+      ctx.lineWidth = maj ? 2.8 : mid ? 1.8 : 1.0;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * radius * (maj ? 0.79 : mid ? 0.82 : 0.84), Math.sin(a) * radius * (maj ? 0.79 : mid ? 0.82 : 0.84));
+      ctx.lineTo(Math.cos(a) * radius * 0.92, Math.sin(a) * radius * 0.92);
+      ctx.stroke();
+    }
+
+    const slideNums = ['60', '70', '80', '90', '10', '12', '15', '20', '25', '30', '35', '40', '45', '50'];
+    ctx.fillStyle = '#181B20';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    slideNums.forEach((lbl, idx) => {
+      const a = (idx / slideNums.length) * Math.PI * 2 - Math.PI / 2;
+      ctx.save();
+      ctx.rotate(a + Math.PI / 2);
+      ctx.fillStyle = lbl === '10' || lbl === '60' ? '#B91C1C' : '#181B20';
+      ctx.font = '700 18px "JetBrains Mono", monospace';
+      ctx.fillText(lbl, 0, -radius * 0.925);
+      ctx.restore();
+    });
+
+    // Reverse-Panda contrasting silver tri-compax subdials
+    const naviSubs = [
+      { x: 162, y: 12, ticks: [10, 20, 30] },
+      { x: -162, y: 12, ticks: [20, 40, 60] },
+      { x: 0, y: 172, ticks: [3, 6, 9, 12] },
+    ];
+    naviSubs.forEach((sub, sIdx) => {
+      const sr = 86;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(sub.x, sub.y, sr, 0, Math.PI * 2);
+      ctx.fillStyle = '#F3F1EA';
+      ctx.fill();
+      ctx.strokeStyle = '#9CA3AF';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      for (let t = 0; t < 24; t++) {
+        const ta = (t / 24) * Math.PI * 2 - Math.PI / 2;
+        ctx.strokeStyle = '#14171A';
+        ctx.lineWidth = t % 4 === 0 ? 2.4 : 1.1;
+        ctx.beginPath();
+        ctx.moveTo(sub.x + Math.cos(ta) * (sr - 15), sub.y + Math.sin(ta) * (sr - 15));
+        ctx.lineTo(sub.x + Math.cos(ta) * (sr - 6), sub.y + Math.sin(ta) * (sr - 6));
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#14171A';
+      ctx.font = '700 15px "JetBrains Mono", monospace';
+      sub.ticks.forEach((num, idx) => {
+        const a = ((idx + 1) / sub.ticks.length) * Math.PI * 2 - Math.PI / 2;
+        ctx.fillText(String(num), sub.x + Math.cos(a) * (sr - 30), sub.y + Math.sin(a) * (sr - 30));
+      });
+      if (sIdx === 2) {
+        ctx.fillStyle = '#111827';
+        ctx.fillRect(sub.x - 24, sub.y + 30, 48, 34);
+        ctx.fillStyle = '#F9FAFB';
+        ctx.font = '700 22px "JetBrains Mono", monospace';
+        ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), sub.x, sub.y + 48);
+      }
+      ctx.restore();
+    });
+
+    ctx.fillStyle = '#D4AF37';
+    ctx.font = '700 26px Georgia, serif';
+    ctx.fillText('B', 0, -172);
+    ctx.fillStyle = '#F3F1EA';
+    ctx.font = '700 20px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('BREITLING', 0, -138);
+    ctx.fillStyle = '#D4AF37';
+    ctx.font = '600 14px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('NAVITIMER', 0, -112);
+    ctx.restore();
+
+    const navTex = new THREE.CanvasTexture(canvas);
+    navTex.colorSpace = THREE.SRGBColorSpace;
+    navTex.anisotropy = maxAnisotropy;
+    navTex.needsUpdate = true;
+    return navTex;
+  }
+
+  if (watch.id === 'zenith-el-primero') {
+    ctx.save();
+    ctx.translate(cx, cy);
+    // 1/10th-second outer precision chapter track
+    for (let i = 0; i < 100; i++) {
+      const a = (i / 100) * Math.PI * 2 - Math.PI / 2;
+      const maj = i % 10 === 0;
+      ctx.strokeStyle = maj ? '#DC2626' : '#1E242B';
+      ctx.lineWidth = maj ? 3.2 : 1.4;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * radius * (maj ? 0.865 : 0.895), Math.sin(a) * radius * (maj ? 0.865 : 0.895));
+      ctx.lineTo(Math.cos(a) * radius * 0.945, Math.sin(a) * radius * 0.945);
+      ctx.stroke();
+    }
+
+    // Iconic Overlapping Tri-Color El Primero Subdials: Slate-Grey (9h), Charcoal (6h), Midnight Blue (3h)
+    const triSubs = [
+      { x: -138, y: 18, bg: '#C6CBD1', fg: '#14171A', ticks: [20, 40, 60] },
+      { x: 0, y: 152, bg: '#373C44', fg: '#F3F4F6', ticks: [15, 30, 45, 60] },
+      { x: 138, y: 18, bg: '#1D3C6B', fg: '#F3F4F6', ticks: [20, 40, 60] },
+    ];
+    triSubs.forEach((sub) => {
+      const sr = 104;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(sub.x, sub.y, sr, 0, Math.PI * 2);
+      ctx.fillStyle = sub.bg;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.22)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      for (let t = 0; t < 30; t++) {
+        const ta = (t / 30) * Math.PI * 2 - Math.PI / 2;
+        const maj = t % 5 === 0;
+        ctx.strokeStyle = sub.fg;
+        ctx.lineWidth = maj ? 2.4 : 1.1;
+        ctx.beginPath();
+        ctx.moveTo(sub.x + Math.cos(ta) * (sr - (maj ? 18 : 12)), sub.y + Math.sin(ta) * (sr - (maj ? 18 : 12)));
+        ctx.lineTo(sub.x + Math.cos(ta) * (sr - 5), sub.y + Math.sin(ta) * (sr - 5));
+        ctx.stroke();
+      }
+      ctx.fillStyle = sub.fg;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '700 16px "JetBrains Mono", monospace';
+      sub.ticks.forEach((num, idx) => {
+        const a = ((idx + 1) / sub.ticks.length) * Math.PI * 2 - Math.PI / 2;
+        ctx.fillText(String(num), sub.x + Math.cos(a) * (sr - 33), sub.y + Math.sin(a) * (sr - 33));
+      });
+      ctx.restore();
+    });
+
+    // Zenith 5-point Star & Branding
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#14171A';
+    ctx.font = '700 28px Georgia, serif';
+    ctx.fillText('★', 0, -196);
+    ctx.font = '700 24px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('Z E N I T H', 0, -152);
+    ctx.fillStyle = '#DC2626';
+    ctx.font = '700 13px "JetBrains Mono", monospace';
+    ctx.fillText('EL PRIMERO · 36,000 VpH', 0, -122);
+
+    // 4:30 Trapezoid Date Window
+    ctx.save();
+    ctx.translate(216, 206);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = '#9CA3AF';
+    ctx.lineWidth = 3;
+    ctx.fillRect(-26, -22, 52, 44);
+    ctx.strokeRect(-26, -22, 52, 44);
+    ctx.fillStyle = '#111827';
+    ctx.font = '700 26px "JetBrains Mono", monospace';
+    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), 0, 1);
+    ctx.restore();
+
+    ctx.fillStyle = mutedInk;
+    ctx.font = '500 12px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('SWISS MADE', 0, radius * 0.87);
+    ctx.restore();
+
+    const zenTex = new THREE.CanvasTexture(canvas);
+    zenTex.colorSpace = THREE.SRGBColorSpace;
+    zenTex.anisotropy = maxAnisotropy;
+    zenTex.needsUpdate = true;
+    return zenTex;
+  }
+
+  if (watch.id === 'iwc-big-pilot') {
+    ctx.save();
+    ctx.translate(cx, cy);
+    for (let i = 0; i < 60; i++) {
+      const a = (i / 60) * Math.PI * 2 - Math.PI / 2;
+      const maj = i % 5 === 0;
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = maj ? 5 : 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * radius * (maj ? 0.85 : 0.89), Math.sin(a) * radius * (maj ? 0.85 : 0.89));
+      ctx.lineTo(Math.cos(a) * radius * 0.945, Math.sin(a) * radius * 0.945);
+      ctx.stroke();
+    }
+
+    // 12 o'clock Aviation Orientation Triangle + Twin Dots
+    ctx.fillStyle = '#E8EFE2';
+    ctx.beginPath();
+    ctx.moveTo(0, -radius * 0.82);
+    ctx.lineTo(26, -radius * 0.7);
+    ctx.lineTo(-26, -radius * 0.7);
+    ctx.closePath();
+    ctx.fill();
+    [-38, 38].forEach((dx) => {
+      ctx.beginPath();
+      ctx.arc(dx, -radius * 0.76, 9, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Crisp luminous cockpit Arabic numerals
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#EDF2E8';
+    ctx.font = '700 46px "Plus Jakarta Sans", Arial, sans-serif';
+    for (let h = 1; h <= 11; h++) {
+      if (h === 3 || h === 6) continue;
+      const a = (h / 12) * Math.PI * 2 - Math.PI / 2;
+      ctx.fillText(String(h), Math.cos(a) * radius * 0.69, Math.sin(a) * radius * 0.69);
+    }
+
+    // Inner 24-hour UTC track
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.55)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.44, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = '#EF4444';
+    ctx.font = '700 16px "JetBrains Mono", monospace';
+    for (let u = 2; u <= 24; u += 2) {
+      const a = (u / 24) * Math.PI * 2 - Math.PI / 2;
+      ctx.fillText(String(u), Math.cos(a) * radius * 0.37, Math.sin(a) * radius * 0.37);
+    }
+
+    // 3 o'clock Power Reserve Gauge
+    const prx = radius * 0.54;
+    ctx.strokeStyle = '#9CA3AF';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(prx, 0, 74, -Math.PI * 0.4, Math.PI * 0.4);
+    ctx.stroke();
+    ctx.fillStyle = '#EF4444';
+    ctx.font = '700 13px "JetBrains Mono", monospace';
+    ctx.fillText('7 DAYS', prx + 8, 52);
+
+    // 6 o'clock date window
+    const dy = radius * 0.66;
+    ctx.fillStyle = '#0B0D0F';
+    ctx.strokeStyle = '#6B7280';
+    ctx.lineWidth = 3;
+    ctx.fillRect(-34, dy - 24, 68, 48);
+    ctx.strokeRect(-34, dy - 24, 68, 48);
+    ctx.fillStyle = '#F3F4F6';
+    ctx.font = '700 32px "JetBrains Mono", monospace';
+    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), 0, dy + 1);
+
+    ctx.fillStyle = ink;
+    ctx.font = '700 28px Georgia, serif';
+    ctx.fillText('I W C', 0, -158);
+    ctx.fillStyle = mutedInk;
+    ctx.font = '500 14px "Plus Jakarta Sans", Arial, sans-serif';
+    ctx.fillText('SCHAFFHAUSEN', 0, -126);
+    ctx.restore();
+
+    const iwcTex = new THREE.CanvasTexture(canvas);
+    iwcTex.colorSpace = THREE.SRGBColorSpace;
+    iwcTex.anisotropy = maxAnisotropy;
+    iwcTex.needsUpdate = true;
+    return iwcTex;
+  }
+
+  if (watch.id === 'breguet-classique') {
+    ctx.save();
+    ctx.translate(cx, cy);
+    // Smooth brushed silvered chapter ring framing the Clous de Paris guilloche center
+    ctx.strokeStyle = 'rgba(235, 232, 224, 0.92)';
+    ctx.lineWidth = 96;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.78, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#8C8579';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.68, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.89, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Breguet minute dots + fleur-de-lis 5-minute markers
+    for (let i = 0; i < 60; i++) {
+      const a = (i / 60) * Math.PI * 2 - Math.PI / 2;
+      const rDot = radius * 0.865;
+      ctx.fillStyle = '#181A1E';
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * rDot, Math.sin(a) * rDot, i % 5 === 0 ? 4.5 : 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Classic calligraphic Breguet Arabic numerals (1–12)
+    ctx.fillStyle = '#15171A';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'italic 700 44px Georgia, serif';
+    for (let h = 1; h <= 12; h++) {
+      if (h === 3) continue;
+      const a = (h / 12) * Math.PI * 2 - Math.PI / 2;
+      ctx.fillText(String(h), Math.cos(a) * radius * 0.77, Math.sin(a) * radius * 0.77);
+    }
+
+    // Cartouche plaque + Secret Breguet signatures flanking 12
+    ctx.fillStyle = '#F1EEE7';
+    ctx.fillRect(-108, -162, 216, 44);
+    ctx.strokeStyle = '#9C9486';
+    ctx.lineWidth = 1.8;
+    ctx.strokeRect(-108, -162, 216, 44);
+    ctx.fillStyle = '#15171A';
+    ctx.font = 'italic 700 32px Georgia, serif';
+    ctx.fillText('Breguet', 0, -140);
+
+    ctx.fillStyle = 'rgba(21,23,26,0.5)';
+    ctx.font = 'italic 600 10px Georgia, serif';
+    ctx.fillText('Breguet', -58, -radius * 0.63);
+    ctx.fillText('Breguet', 58, -radius * 0.63);
+    ctx.fillStyle = '#4B5563';
+    ctx.font = '600 13px "JetBrains Mono", monospace';
+    ctx.fillText('N° 5177 · SWISS GUILLOCHE', 0, 144);
+
+    // 3 o'clock beveled oval date aperture
+    const dx = radius * 0.76;
+    ctx.fillStyle = '#FAF8F4';
+    ctx.strokeStyle = '#8C8579';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(dx - 34, -24, 68, 48, 12);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#15171A';
+    ctx.font = '700 32px Georgia, serif';
+    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2);
+    ctx.restore();
+
+    const brgTex = new THREE.CanvasTexture(canvas);
+    brgTex.colorSpace = THREE.SRGBColorSpace;
+    brgTex.anisotropy = maxAnisotropy;
+    brgTex.needsUpdate = true;
+    return brgTex;
+  }
+
   // Brand crown & typography (positioned upper dial)
   const crownColor = dial.lightText ? '#E6C875' : '#A6832C';
   if (watch.id !== 'datejust' && watch.id !== 'daydate') {
@@ -1362,11 +2142,14 @@ export function createBezelInsertTexture(
   ctx.fillStyle = sheen;
   ctx.fillRect(0, 0, size, size);
 
+  const isTudorGilt = watch.id === 'tudor-bb58' && bezel.id === 'default';
   const numColor = isSteel24
     ? '#14171A'
     : watch.bezelType === 'tachymeter'
       ? '#E8D39B'
-      : '#EAECEF';
+      : isTudorGilt
+        ? '#E3BE78'
+        : '#EAECEF';
   const rText = size * 0.422;
 
   ctx.save();
@@ -1374,7 +2157,11 @@ export function createBezelInsertTexture(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  if (watch.bezelType === 'dive-cerachrom' || watch.bezelType === 'yacht-cerachrom') {
+  if (
+    watch.bezelType === 'dive-cerachrom' ||
+    watch.bezelType === 'yacht-cerachrom' ||
+    watch.bezelType === 'seamaster'
+  ) {
     const isYacht = watch.bezelType === 'yacht-cerachrom';
     if (isYacht) {
       // Matte sandblasted Cerachrom background micro-grain
@@ -1391,11 +2178,11 @@ export function createBezelInsertTexture(
       if (m === 0) {
         ctx.save();
         ctx.rotate(a + Math.PI / 2);
-        ctx.fillStyle = isYacht ? '#E5E8EC' : numColor;
+        ctx.fillStyle = isTudorGilt ? '#A81C1C' : isYacht ? '#E5E8EC' : numColor;
         ctx.beginPath();
-        ctx.moveTo(-22, -rText - 14);
-        ctx.lineTo(22, -rText - 14);
-        ctx.lineTo(0, -rText + 22);
+        ctx.moveTo(-24, -rText - 16);
+        ctx.lineTo(24, -rText - 16);
+        ctx.lineTo(0, -rText + 24);
         ctx.closePath();
         ctx.fill();
         ctx.restore();
@@ -1421,6 +2208,27 @@ export function createBezelInsertTexture(
         ctx.stroke();
       }
     }
+  } else if (watch.bezelType === 'navitimer') {
+    const naviOuterNums = ['10', '11', '12', '13', '14', '15', '17', '20', '25', '30', '35', '40', '45', '50', '60', '70', '80', '90'];
+    for (let i = 0; i < 120; i++) {
+      const a = (i / 120) * Math.PI * 2 - Math.PI / 2;
+      const maj = i % 10 === 0;
+      ctx.strokeStyle = maj ? '#EF4444' : '#F3F4F6';
+      ctx.lineWidth = maj ? 4 : 1.5;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * (rText - (maj ? 20 : 12)), Math.sin(a) * (rText - (maj ? 20 : 12)));
+      ctx.lineTo(Math.cos(a) * (rText - 2), Math.sin(a) * (rText - 2));
+      ctx.stroke();
+    }
+    naviOuterNums.forEach((lbl, idx) => {
+      const a = (idx / naviOuterNums.length) * Math.PI * 2 - Math.PI / 2;
+      ctx.save();
+      ctx.rotate(a + Math.PI / 2);
+      ctx.fillStyle = lbl === '10' || lbl === '60' ? '#EF4444' : '#F3F4F6';
+      ctx.font = '700 26px "JetBrains Mono", monospace';
+      ctx.fillText(lbl, 0, -rText + 10);
+      ctx.restore();
+    });
   } else if (watch.bezelType === 'gmt-cerachrom' || watch.bezelType === 'steel-24h') {
     // 24-hour markings (2, 4, 6, ... 22, triangle at 24)
     for (let h = 0; h < 24; h++) {
@@ -1792,10 +2600,18 @@ export function createRehautTexture(
     ROLEX: 'R O L E X',
     'AVI-8': 'A V I - 8',
     OMEGA: 'O M E G A',
+    TUDOR: 'T U D O R',
+    'VACHERON CONSTANTIN': 'VACHERON CONSTANTIN',
     'AUDEMARS PIGUET': 'AUDEMARS PIGUET',
     'PATEK PHILIPPE': 'PATEK PHILIPPE',
     CARTIER: 'C A R T I E R',
     'JAEGER-LECOULTRE': 'JAEGER-LECOULTRE',
+    PANERAI: 'P A N E R A I',
+    'TAG HEUER': 'TAG HEUER',
+    BREITLING: 'B R E I T L I N G',
+    ZENITH: 'Z E N I T H',
+    'IWC SCHAFFHAUSEN': 'IWC SCHAFFHAUSEN',
+    BREGUET: 'B R E G U E T',
     'GRAND SEIKO': 'GRAND SEIKO',
     'A. LANGE & SÖHNE': 'A. LANGE & SÖHNE',
     'RICHARD MILLE': 'RICHARD MILLE',
@@ -1991,8 +2807,19 @@ export function createCasebackEngravingTexture(
     ctx.stroke();
     ctx.restore();
   } else if (watch.brand === 'OMEGA') {
-    drawArcText('FLIGHT-QUALIFIED BY NASA', 136, 0, 0.078);
-    drawArcText('SPEEDMASTER · MOONWATCH', 136, Math.PI, 0.078);
+    if (watch.id === 'omega-seamaster') {
+      drawArcText('SEAMASTER DIVER 300M · CO-AXIAL', 136, 0, 0.068);
+      drawArcText(`MASTER CHRONOMETER · ${watch.reference}`, 136, Math.PI, 0.064);
+    } else {
+      drawArcText('FLIGHT-QUALIFIED BY NASA', 136, 0, 0.078);
+      drawArcText('SPEEDMASTER · MOONWATCH', 136, Math.PI, 0.078);
+    }
+  } else if (watch.brand === 'TUDOR') {
+    drawArcText('TUDOR GENEVE · BORN TO DARE', 136, 0, 0.074);
+    drawArcText(`BLACK BAY 58 · ${watch.reference}`, 136, Math.PI, 0.074);
+  } else if (watch.brand === 'VACHERON CONSTANTIN') {
+    drawArcText('VACHERON CONSTANTIN GENEVE', 136, 0, 0.072);
+    drawArcText(`OVERSEAS · POINCON DE GENEVE`, 136, Math.PI, 0.07);
   } else if (watch.brand === 'AUDEMARS PIGUET') {
     drawArcText('ROYAL OAK · EXTRA-THIN', 136, 0, 0.08);
     drawArcText(`REF. ${watch.reference} · LE BRASSUS`, 136, Math.PI, 0.076);
@@ -2005,6 +2832,24 @@ export function createCasebackEngravingTexture(
   } else if (watch.brand === 'JAEGER-LECOULTRE') {
     drawArcText('JAEGER-LECOULTRE · REVERSO DUOFACE', 136, 0, 0.068);
     drawArcText(`MANUFACTURE LE SENTIER · ${watch.reference}`, 136, Math.PI, 0.064);
+  } else if (watch.brand === 'PANERAI') {
+    drawArcText('OFFICINE PANERAI · FIRENZE 1860', 136, 0, 0.068);
+    drawArcText(`LUMINOR MARINA · 300M · ${watch.reference}`, 136, Math.PI, 0.066);
+  } else if (watch.brand === 'TAG HEUER') {
+    drawArcText('TAG HEUER MONACO · CALIBRE 11', 136, 0, 0.07);
+    drawArcText(`SWISS AVANT-GARDE · ${watch.reference}`, 136, Math.PI, 0.068);
+  } else if (watch.brand === 'BREITLING') {
+    drawArcText('BREITLING · NAVITIMER CHRONOGRAPH', 136, 0, 0.066);
+    drawArcText(`MANUFACTURE CAL. B01 · ${watch.reference}`, 136, Math.PI, 0.064);
+  } else if (watch.brand === 'ZENITH') {
+    drawArcText('ZENITH · EL PRIMERO 36,000 VpH', 136, 0, 0.068);
+    drawArcText(`LE LOCLE MANUFACTURE · ${watch.reference}`, 136, Math.PI, 0.064);
+  } else if (watch.brand === 'IWC SCHAFFHAUSEN') {
+    drawArcText('IWC SCHAFFHAUSEN · BIG PILOT UTC', 136, 0, 0.066);
+    drawArcText(`PROBUS SCAFUSIA · ${watch.reference}`, 136, Math.PI, 0.072);
+  } else if (watch.brand === 'BREGUET') {
+    drawArcText('HORLOGER DE LA MARINE · BREGUET', 136, 0, 0.068);
+    drawArcText(`CLASSIQUE 5177 · ${watch.reference}`, 136, Math.PI, 0.074);
   } else if (watch.brand === 'GRAND SEIKO') {
     drawArcText('GRAND SEIKO · SPRING DRIVE', 136, 0, 0.076);
     drawArcText(`ZARATSU POLISH · ${watch.reference}`, 136, Math.PI, 0.072);
