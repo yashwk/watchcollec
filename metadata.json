@@ -1,0 +1,6 @@
+{
+  "name": "Rolex — Perpetual 3D Horology Showcase",
+  "description": "Interactive 3D Rolex timepiece atelier featuring live mechanical calibers, custom alloys and dials, exploded view, and curated collection.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
