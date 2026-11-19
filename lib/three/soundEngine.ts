@@ -34,6 +34,8 @@ class HorologySoundEngine {
     this.enabled = val;
     if (val) {
       this.ensureContext();
+    } else if (this.ctx && this.ctx.state === 'running') {
+      this.ctx.suspend().catch(() => {});
     }
   }
 
@@ -41,7 +43,7 @@ class HorologySoundEngine {
     return this.enabled;
   }
 
-  public playEscapementTick(accent = false) {
+  public playEscapementTick(accent = false, freqScale = 1) {
     if (!this.enabled) return;
     const ctx = this.ensureContext();
     if (!ctx || !this.tickFilter) return;
@@ -50,9 +52,10 @@ class HorologySoundEngine {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
 
+    const safeScale = Math.max(0.7, Math.min(1.35, freqScale));
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(accent ? 3200 : 2680, now);
-    osc.frequency.exponentialRampToValueAtTime(880, now + 0.012);
+    osc.frequency.setValueAtTime((accent ? 3200 : 2680) * safeScale, now);
+    osc.frequency.exponentialRampToValueAtTime(880 * safeScale, now + 0.012);
 
     gain.gain.setValueAtTime(0.0001, now);
     gain.gain.linearRampToValueAtTime(accent ? 0.032 : 0.022, now + 0.0015);
@@ -60,6 +63,10 @@ class HorologySoundEngine {
 
     osc.connect(gain);
     gain.connect(this.tickFilter);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
 
     osc.start(now);
     osc.stop(now + 0.02);
@@ -83,6 +90,10 @@ class HorologySoundEngine {
 
     osc.connect(gain);
     gain.connect(this.masterGain);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
 
     osc.start(now);
     osc.stop(now + 0.035);
@@ -106,6 +117,10 @@ class HorologySoundEngine {
 
     osc.connect(gain);
     gain.connect(this.masterGain);
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
 
     osc.start(now);
     osc.stop(now + 0.045);

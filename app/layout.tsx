@@ -26,18 +26,18 @@ const jetbrains = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'Atelier Horloger — Multi-Maison 3D Horology Studio',
   description:
-    'Interactive 3D Haute Horlogerie showcase spanning Rolex, Omega, Audemars Piguet, Patek Philippe, Cartier, Jaeger-LeCoultre, Grand Seiko, A. Lange & Söhne, Richard Mille, and AVI-8.',
+    'Interactive 3D Haute Horlogerie showcase spanning 46 iconic timepieces across 30 Swiss, Saxon, Japanese, French, Italian, and digital watchmaking maisons.',
   openGraph: {
     title: 'Atelier Horloger — Multi-Maison 3D Horology Studio',
     description:
-      'Interactive 3D Haute Horlogerie showcase spanning iconic Swiss, Saxon, Japanese, French, and aviation maisons.',
+      'Interactive 3D Haute Horlogerie studio featuring 46 horological icons across 30 maisons—from Rolex, Patek Philippe, and F.P. Journe to Grand Seiko and Casio G-Shock.',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Atelier Horloger — Multi-Maison 3D Horology Studio',
     description:
-      'Interactive 3D Haute Horlogerie showcase spanning iconic Swiss, Saxon, Japanese, French, and aviation maisons.',
+      'Interactive 3D Haute Horlogerie studio featuring 46 horological icons across 30 maisons—from Rolex, Patek Philippe, and F.P. Journe to Grand Seiko and Casio G-Shock.',
   },
 };
 

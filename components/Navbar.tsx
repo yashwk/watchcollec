@@ -145,39 +145,41 @@ export default function Navbar({
         {navStyle === 'wheel' ? (
           <nav
             aria-label="Timepiece models"
-            className="hidden lg:flex min-w-0 flex-1 items-center justify-center gap-4 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden text-[12px] font-medium tracking-wide"
+            className="hidden lg:flex min-w-0 flex-1 items-center justify-start overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden text-[12px] font-medium tracking-wide"
           >
-            {visibleModels.map((w) => {
-              const active = w.id === selectedModel;
-              return (
-                <button
-                  key={w.id}
-                  type="button"
-                  title={`${w.brand} — ${w.name}`}
-                  onClick={() => onSelectModel(w.id)}
-                  className={`cursor-pointer relative whitespace-nowrap shrink-0 py-1.5 transition-colors ${
-                    active
-                      ? isLightBackdrop
-                        ? 'text-[#111513]'
-                        : 'text-[#F4F2ED]'
-                      : isLightBackdrop
-                        ? 'text-[#111513]/60 hover:text-[#111513]'
-                        : 'text-[#F4F2ED]/60 hover:text-[#F4F2ED]'
-                  }`}
-                >
-                  {w.shortName}
-                  {active && (
-                    <motion.span
-                      layoutId="navbar-model-underline"
-                      transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-                      className={`absolute right-0 bottom-0 left-0 h-0.5 ${
-                        isLightBackdrop ? 'bg-[#8A6818]' : 'bg-[#D4AF37]'
-                      }`}
-                    />
-                  )}
-                </button>
-              );
-            })}
+            <div className="mx-auto flex w-max items-center gap-4 px-1">
+              {visibleModels.map((w) => {
+                const active = w.id === selectedModel;
+                return (
+                  <button
+                    key={w.id}
+                    type="button"
+                    title={`${w.brand} — ${w.name}`}
+                    onClick={() => onSelectModel(w.id)}
+                    className={`cursor-pointer relative whitespace-nowrap shrink-0 py-1.5 transition-colors ${
+                      active
+                        ? isLightBackdrop
+                          ? 'text-[#111513]'
+                          : 'text-[#F4F2ED]'
+                        : isLightBackdrop
+                          ? 'text-[#111513]/60 hover:text-[#111513]'
+                          : 'text-[#F4F2ED]/60 hover:text-[#F4F2ED]'
+                    }`}
+                  >
+                    {w.shortName}
+                    {active && (
+                      <motion.span
+                        layoutId="navbar-model-underline"
+                        transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                        className={`absolute right-0 bottom-0 left-0 h-0.5 ${
+                          isLightBackdrop ? 'bg-[#8A6818]' : 'bg-[#D4AF37]'
+                        }`}
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </nav>
         ) : (
           <div className="hidden md:flex items-center gap-2">

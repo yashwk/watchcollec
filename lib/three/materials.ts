@@ -1,5 +1,11 @@
 import * as THREE from 'three';
-import { AlloyOption, BeltShadeOption, LightingModeId, LumePalette } from '@/lib/watches';
+import {
+  AlloyOption,
+  BeltShadeOption,
+  LightingModeId,
+  LumePalette,
+  WristStyleId,
+} from '@/lib/watches';
 import {
   createAlligatorLeatherTextures,
   createBrushedMetalBumpTexture,
@@ -20,6 +26,8 @@ export interface WatchMaterialSet {
   secondaryLume: THREE.MeshStandardMaterial;
   handMetal: THREE.MeshPhysicalMaterial;
   bluedHands: THREE.MeshPhysicalMaterial;
+  matteBlackHands: THREE.MeshPhysicalMaterial;
+  ivoryCreamHands: THREE.MeshPhysicalMaterial;
   crimsonAccent: THREE.MeshPhysicalMaterial;
   orangeAccent: THREE.MeshPhysicalMaterial;
   sapphireCabochon: THREE.MeshPhysicalMaterial;
@@ -42,10 +50,13 @@ const _baseCol = new THREE.Color();
 const _patinaUmber = new THREE.Color(0x4b3522);
 const _patinaVerdigris = new THREE.Color(0x3a5d4b);
 
+export type CaseSurfaceFinish = 'standard' | 'resin' | 'sandblasted';
+
 export function applyAlloyToMaterialSet(
   mats: WatchMaterialSet,
   alloy: AlloyOption,
-  patina = 0
+  patina = 0,
+  caseFinish: CaseSurfaceFinish = 'standard'
 ) {
   const p = THREE.MathUtils.clamp(patina, 0, 1);
 
@@ -65,11 +76,72 @@ export function applyAlloyToMaterialSet(
   blendPatina(alloy.centerColor, mats.centerLinkMetal.color);
   blendPatina(alloy.bezelMetalColor, mats.bezelMetal.color);
 
-  mats.brushedMetal.roughness = 0.24 + p * 0.34;
-  mats.polishedMetal.roughness = 0.045 + p * 0.28;
-  mats.polishedMetal.clearcoat = Math.max(0.08, 0.45 * (1 - p * 0.78));
-  mats.bezelMetal.roughness = 0.048 + p * 0.26;
-  mats.bezelMetal.clearcoat = Math.max(0.08, 0.5 * (1 - p * 0.78));
+  if (caseFinish === 'resin') {
+    // Matte shock-absorbing polymer resin (G-Shock / F-91W default finish)
+    mats.brushedMetal.metalness = 0.08;
+    mats.brushedMetal.roughness = Math.min(0.88, 0.68 + p * 0.16);
+    mats.brushedMetal.anisotropy = 0;
+    mats.brushedMetal.bumpScale = 0.003;
+    mats.brushedMetal.envMapIntensity = 0.55;
+
+    mats.polishedMetal.metalness = 0.1;
+    mats.polishedMetal.roughness = Math.min(0.84, 0.58 + p * 0.18);
+    mats.polishedMetal.clearcoat = 0.08;
+    mats.polishedMetal.envMapIntensity = 0.65;
+
+    mats.centerLinkMetal.metalness = 0.08;
+    mats.centerLinkMetal.roughness = 0.66;
+    mats.centerLinkMetal.clearcoat = 0.06;
+    mats.centerLinkMetal.envMapIntensity = 0.55;
+
+    mats.bezelMetal.metalness = 0.08;
+    mats.bezelMetal.roughness = Math.min(0.86, 0.64 + p * 0.16);
+    mats.bezelMetal.clearcoat = 0.08;
+    mats.bezelMetal.envMapIntensity = 0.6;
+  } else if (caseFinish === 'sandblasted') {
+    // Micro-blasted monochrome matte Grade 5 Titanium (Bulgari Octo Finissimo)
+    mats.brushedMetal.metalness = 0.86;
+    mats.brushedMetal.roughness = Math.min(0.66, 0.46 + p * 0.16);
+    mats.brushedMetal.anisotropy = 0.08;
+    mats.brushedMetal.bumpScale = 0.002;
+    mats.brushedMetal.envMapIntensity = 0.92;
+
+    mats.polishedMetal.metalness = 0.86;
+    mats.polishedMetal.roughness = Math.min(0.62, 0.42 + p * 0.16);
+    mats.polishedMetal.clearcoat = 0.04;
+    mats.polishedMetal.envMapIntensity = 0.95;
+
+    mats.centerLinkMetal.metalness = 0.86;
+    mats.centerLinkMetal.roughness = 0.44;
+    mats.centerLinkMetal.clearcoat = 0.04;
+    mats.centerLinkMetal.envMapIntensity = 0.92;
+
+    mats.bezelMetal.metalness = 0.86;
+    mats.bezelMetal.roughness = Math.min(0.64, 0.44 + p * 0.16);
+    mats.bezelMetal.clearcoat = 0.05;
+    mats.bezelMetal.envMapIntensity = 0.96;
+  } else {
+    mats.brushedMetal.metalness = 0.96;
+    mats.brushedMetal.roughness = 0.24 + p * 0.34;
+    mats.brushedMetal.anisotropy = 0.9;
+    mats.brushedMetal.bumpScale = 0.007;
+    mats.brushedMetal.envMapIntensity = 1.48;
+
+    mats.polishedMetal.metalness = 1.0;
+    mats.polishedMetal.roughness = 0.045 + p * 0.28;
+    mats.polishedMetal.clearcoat = Math.max(0.08, 0.45 * (1 - p * 0.78));
+    mats.polishedMetal.envMapIntensity = 1.78;
+
+    mats.centerLinkMetal.metalness = 1.0;
+    mats.centerLinkMetal.roughness = 0.055;
+    mats.centerLinkMetal.clearcoat = 0.45;
+    mats.centerLinkMetal.envMapIntensity = 1.75;
+
+    mats.bezelMetal.metalness = 1.0;
+    mats.bezelMetal.roughness = 0.048 + p * 0.26;
+    mats.bezelMetal.clearcoat = Math.max(0.08, 0.5 * (1 - p * 0.78));
+    mats.bezelMetal.envMapIntensity = 1.85;
+  }
 
   mats.handMetal.color.setHex(
     alloy.id === 'yellow-gold' || alloy.id === 'rolesor'
@@ -113,6 +185,34 @@ export function applyLumePaletteToMaterialSet(
   mats.secondaryLume.emissiveIntensity = intensity;
 }
 
+export function applyWristStyleToMaterialSet(
+  mats: WatchMaterialSet,
+  styleId: WristStyleId
+) {
+  if (styleId === 'navy-tailor') {
+    mats.wristMannequin.color.setHex(0xc89d7c);
+    mats.wristMannequin.roughness = 0.62;
+    mats.wristMannequin.sheenColor?.setHex(0xdeb89a);
+    mats.wristCuff.color.setHex(0x16243d);
+    mats.wristCuff.roughness = 0.82;
+    mats.wristCuff.sheenColor?.setHex(0x2c446e);
+  } else if (styleId === 'espresso-suede') {
+    mats.wristMannequin.color.setHex(0x8c674e);
+    mats.wristMannequin.roughness = 0.65;
+    mats.wristMannequin.sheenColor?.setHex(0xa98266);
+    mats.wristCuff.color.setHex(0x3b2618);
+    mats.wristCuff.roughness = 0.9;
+    mats.wristCuff.sheenColor?.setHex(0x5c3c27);
+  } else {
+    mats.wristMannequin.color.setHex(0x22262b);
+    mats.wristMannequin.roughness = 0.68;
+    mats.wristMannequin.sheenColor?.setHex(0x3a4048);
+    mats.wristCuff.color.setHex(0x13171b);
+    mats.wristCuff.roughness = 0.85;
+    mats.wristCuff.sheenColor?.setHex(0x283038);
+  }
+}
+
 export function createWatchMaterialSet(
   alloy: AlloyOption,
   isSoftwareGl: boolean,
@@ -120,7 +220,9 @@ export function createWatchMaterialSet(
   maxAnisotropy = 4,
   patina = 0,
   beltShade?: BeltShadeOption,
-  lumePalette?: LumePalette
+  lumePalette?: LumePalette,
+  wristStyle?: WristStyleId,
+  caseFinish: CaseSurfaceFinish = 'standard'
 ): WatchMaterialSet {
   const brushedBump = createBrushedMetalBumpTexture();
   const leatherTex = createAlligatorLeatherTextures(maxAnisotropy);
@@ -246,6 +348,23 @@ export function createWatchMaterialSet(
     clearcoat: 0.65,
     clearcoatRoughness: 0.03,
     envMapIntensity: 1.85,
+  });
+
+  const matteBlackHands = new THREE.MeshPhysicalMaterial({
+    color: 0x181b20,
+    metalness: 0.38,
+    roughness: 0.42,
+    clearcoat: 0.08,
+    envMapIntensity: 0.85,
+  });
+
+  const ivoryCreamHands = new THREE.MeshPhysicalMaterial({
+    color: 0xf7f1df,
+    metalness: 0.14,
+    roughness: 0.24,
+    clearcoat: 0.4,
+    clearcoatRoughness: 0.18,
+    envMapIntensity: 1.15,
   });
 
   const crimsonAccent = new THREE.MeshPhysicalMaterial({
@@ -408,6 +527,8 @@ export function createWatchMaterialSet(
     secondaryLume,
     handMetal,
     bluedHands,
+    matteBlackHands,
+    ivoryCreamHands,
     crimsonAccent,
     orangeAccent,
     sapphireCabochon,
@@ -436,6 +557,8 @@ export function createWatchMaterialSet(
       secondaryLume,
       handMetal,
       bluedHands,
+      matteBlackHands,
+      ivoryCreamHands,
       crimsonAccent,
       orangeAccent,
       sapphireCabochon,
@@ -454,11 +577,14 @@ export function createWatchMaterialSet(
     ],
   };
 
-  if (patina > 0) {
-    applyAlloyToMaterialSet(set, alloy, patina);
+  if (patina > 0 || caseFinish !== 'standard') {
+    applyAlloyToMaterialSet(set, alloy, patina, caseFinish);
   }
   if (beltShade) {
     applyBeltShadeToMaterialSet(set, beltShade);
+  }
+  if (wristStyle) {
+    applyWristStyleToMaterialSet(set, wristStyle);
   }
   return set;
 }

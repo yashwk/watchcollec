@@ -12,23 +12,29 @@ import {
   BeltId,
   BeltShadeId,
   BezelId,
+  CaliberBeatProfile,
   CameraPresetId,
+  CrownPosition,
   DialId,
   LightingModeId,
   WatchModelId,
   WatchSpec,
+  WristStyleId,
   getWatchById,
   resolveAlloy,
   resolveBeltShade,
   resolveBezel,
+  resolveCaliberBeatProfile,
   resolveDial,
   resolveLumePalette,
+  resolveWatchCapabilities,
 } from '@/lib/watches';
 import {
   WatchMaterialSet,
   applyAlloyToMaterialSet,
   applyBeltShadeToMaterialSet,
   applyLumePaletteToMaterialSet,
+  applyWristStyleToMaterialSet,
   createWatchMaterialSet,
 } from './materials';
 import { horologyAudio } from './soundEngine';
@@ -58,7 +64,7 @@ export interface StudioState {
   gallerySweep: boolean;
   loupeActive: boolean;
   cinemaMode: boolean;
-  crownPulled: boolean;
+  crownPosition: CrownPosition;
   claspOpen: boolean;
   soundEnabled: boolean;
   xrayDial: boolean;
@@ -68,11 +74,27 @@ export interface StudioState {
   wetStage: boolean;
   wristMode: boolean;
   wristMm: number;
+  wristStyle: WristStyleId;
+  timegrapherMode?: boolean;
   uvTorch: boolean;
   reversoFlipped: boolean;
   caliperMode: boolean;
   glidelockMm: number;
   stageShiftX?: number;
+}
+
+export interface TimegrapherTelemetry {
+  positionLabel: string;
+  vph: number;
+  beatHz: number;
+  isSpringDrive: boolean;
+  isQuartz: boolean;
+  isHacked: boolean;
+  amplitudeDeg: number;
+  beatErrorMs: number;
+  rateSecPerDay: number;
+  liftAngleDeg: number;
+  tickIndex: number;
 }
 
 export interface ChronoTelemetry {
@@ -246,6 +268,8 @@ export class WatchStudioEngine {
   private primaryOffsetX = 0;
   private studioAnchorMs: number;
   private lastDayBucket = -1;
+  private lastDigitalSecBucket = -1;
+  private lastDigitalMinBucket = -1;
   private currentDateOverride: DialDateOverride | undefined = undefined;
 
   private currentExplode = 0;
@@ -263,6 +287,9 @@ export class WatchStudioEngine {
   private crownPullPos = 0;
   private manualTimeOffsetSec = 0;
   private manualTimeTargetSec = 0;
+  private quickSetDayOffset = 0;
+  private quickSetMoonDays = 0;
+  private hackedSecondValue: number | null = null;
   private claspCurrentAngle = 0;
   private claspFlipAngle = -0.14;
   private pusherTravel: [number, number] = [0, 0];
@@ -282,6 +309,7 @@ export class WatchStudioEngine {
 
   private sweepPhase = 0;
   private cinemaPhase = 0;
+  private wristRollRemainingSec = 0;
   private chronoRunning = true;
   private chronoElapsed = 0;
   private chronoDisplayElapsed = 0;
@@ -289,6 +317,7 @@ export class WatchStudioEngine {
   private chronoResetting = false;
   private lastTickStep = -1;
   private lastTelemetryEmit = 0;
+  private lastTimegrapherEmit = 0;
 
   private isTransitioningCam = false;
   private raycaster = new THREE.Raycaster();
@@ -296,6 +325,7 @@ export class WatchStudioEngine {
   private isDraggingOrbit = false;
   private isCrownDragging = false;
   private crownDragLastY = 0;
+  private crownDragAccumPx = 0;
   private isBezelDragging = false;
   private bezelDragLastX = 0;
   private bezelDragAccumPx = 0;
@@ -312,7 +342,7 @@ export class WatchStudioEngine {
   // Callbacks to React UI
   private onExplodeCalloutsCb?: (callouts: ExplodeCallout[]) => void;
   private onCaliperCalloutsCb?: (callouts: CaliperCallout[]) => void;
-  private onCrownPullChangeCb?: (pulled: boolean) => void;
+  private onCrownPositionChangeCb?: (pos: CrownPosition) => void;
   private onClaspOpenChangeCb?: (open: boolean) => void;
   private onReversoFlipChangeCb?: (flipped: boolean) => void;
   private onPowerReserveChangeCb?: (pct: number) => void;
@@ -320,6 +350,7 @@ export class WatchStudioEngine {
   private onMidnightDateJumpCb?: (dayNum: number) => void;
   private onChronoTelemetryCb?: (telemetry: ChronoTelemetry) => void;
   private onBezelAngleChangeCb?: (angleDeg: number) => void;
+  private onTimegrapherTelemetryCb?: (telemetry: TimegrapherTelemetry) => void;
   private lastCalloutsVisible = false;
   private lastCaliperVisible = false;
   private lastExplodeCalloutEmit = 0;
@@ -340,7 +371,7 @@ export class WatchStudioEngine {
       onContextRestored?: () => void;
       onExplodeCallouts?: (callouts: ExplodeCallout[]) => void;
       onCaliperCallouts?: (callouts: CaliperCallout[]) => void;
-      onCrownPullChange?: (pulled: boolean) => void;
+      onCrownPositionChange?: (pos: CrownPosition) => void;
       onClaspOpenChange?: (open: boolean) => void;
       onReversoFlipChange?: (flipped: boolean) => void;
       onPowerReserveChange?: (pct: number) => void;
@@ -348,6 +379,7 @@ export class WatchStudioEngine {
       onMidnightDateJump?: (dayNum: number) => void;
       onChronoTelemetry?: (telemetry: ChronoTelemetry) => void;
       onBezelAngleChange?: (angleDeg: number) => void;
+      onTimegrapherTelemetry?: (telemetry: TimegrapherTelemetry) => void;
     }
   ) {
     this.container = container;
@@ -357,7 +389,7 @@ export class WatchStudioEngine {
     this.onContextRestoredCb = callbacks?.onContextRestored;
     this.onExplodeCalloutsCb = callbacks?.onExplodeCallouts;
     this.onCaliperCalloutsCb = callbacks?.onCaliperCallouts;
-    this.onCrownPullChangeCb = callbacks?.onCrownPullChange;
+    this.onCrownPositionChangeCb = callbacks?.onCrownPositionChange;
     this.onClaspOpenChangeCb = callbacks?.onClaspOpenChange;
     this.onReversoFlipChangeCb = callbacks?.onReversoFlipChange;
     this.onPowerReserveChangeCb = callbacks?.onPowerReserveChange;
@@ -365,6 +397,7 @@ export class WatchStudioEngine {
     this.onMidnightDateJumpCb = callbacks?.onMidnightDateJump;
     this.onChronoTelemetryCb = callbacks?.onChronoTelemetry;
     this.onBezelAngleChangeCb = callbacks?.onBezelAngleChange;
+    this.onTimegrapherTelemetryCb = callbacks?.onTimegrapherTelemetry;
     this.isSoftwareGl = detectSoftwareGl();
 
     const anchorDate = new Date();
@@ -534,18 +567,45 @@ export class WatchStudioEngine {
       : this.studioAnchorMs + this.manualTimeOffsetSec * 1000;
   }
 
-  private syncMidnightDateOverride(refreshTextures: boolean) {
-    const effectiveNowMs = this.getEffectiveNowMs();
-    const dayBucket = Math.floor((effectiveNowMs - TZ_OFFSET_MS) / 86400000);
-    if (dayBucket === this.lastDayBucket) return;
+  private isSecondDigitalModel(id: WatchModelId | null | undefined): boolean {
+    return id === 'casio-gshock-dw5600' || id === 'casio-f91w';
+  }
 
-    const isJump = this.lastDayBucket !== -1 && refreshTextures;
+  private isMinuteDigitalModel(id: WatchModelId | null | undefined): boolean {
+    return id === 'casio-casioak-ga2100' || id === 'lange-zeitwerk';
+  }
+
+  private syncMidnightDateOverride(refreshTextures: boolean) {
+    const effectiveNowMs =
+      this.getEffectiveNowMs() + this.quickSetDayOffset * 86400000;
+    const dayBucket = Math.floor((effectiveNowMs - TZ_OFFSET_MS) / 86400000);
+    const hasSecondDigital =
+      this.isSecondDigitalModel(this.state.modelId) ||
+      this.isSecondDigitalModel(this.state.compareModelId);
+    const hasMinuteDigital =
+      this.isMinuteDigitalModel(this.state.modelId) ||
+      this.isMinuteDigitalModel(this.state.compareModelId);
+    const secBucket = Math.floor(effectiveNowMs / 1000);
+    const minBucket = Math.floor(effectiveNowMs / 60000);
+
+    const dayChanged = dayBucket !== this.lastDayBucket;
+    const secChanged = hasSecondDigital && secBucket !== this.lastDigitalSecBucket;
+    const minChanged = hasMinuteDigital && minBucket !== this.lastDigitalMinBucket;
+
+    if (!dayChanged && !secChanged && !minChanged) return;
+
+    const isJump = dayChanged && this.lastDayBucket !== -1 && refreshTextures;
     this.lastDayBucket = dayBucket;
+    if (hasSecondDigital) this.lastDigitalSecBucket = secBucket;
+    if (hasMinuteDigital) this.lastDigitalMinBucket = minBucket;
     const d = new Date(effectiveNowMs);
     this.currentDateOverride = {
       dayNum: d.getDate(),
       weekday: WEEKDAY_NAMES[d.getDay()],
       monthIdx: d.getMonth(),
+      hours24: d.getHours(),
+      minutes: d.getMinutes(),
+      seconds: d.getSeconds(),
     };
 
     if (!refreshTextures) return;
@@ -555,7 +615,11 @@ export class WatchStudioEngine {
       this.onMidnightDateJumpCb?.(this.currentDateOverride.dayNum);
     }
 
-    if (this.currentRig) {
+    const primaryNeedsRedraw =
+      dayChanged ||
+      (secChanged && this.isSecondDigitalModel(this.state.modelId)) ||
+      (minChanged && this.isMinuteDigitalModel(this.state.modelId));
+    if (this.currentRig && primaryNeedsRedraw) {
       const watch = getWatchById(this.state.modelId);
       this.currentRig.updateDialTexture(
         watch,
@@ -564,7 +628,12 @@ export class WatchStudioEngine {
         this.currentDateOverride
       );
     }
-    if (this.compareRig && this.state.compareModelId) {
+
+    const compareNeedsRedraw =
+      dayChanged ||
+      (secChanged && this.isSecondDigitalModel(this.state.compareModelId)) ||
+      (minChanged && this.isMinuteDigitalModel(this.state.compareModelId));
+    if (this.compareRig && this.state.compareModelId && compareNeedsRedraw) {
       const cw = getWatchById(this.state.compareModelId);
       this.compareRig.updateDialTexture(
         cw,
@@ -666,12 +735,14 @@ export class WatchStudioEngine {
         false
       );
       const hitAction = hits[0]?.object.userData.interactive;
-      if (this.state.crownPulled && hitAction === 'crown') {
+      const caps = resolveWatchCapabilities(getWatchById(this.state.modelId));
+      if (caps.crownMode !== 'none' && this.state.crownPosition > 0 && hitAction === 'crown') {
         this.isCrownDragging = true;
         this.crownDragLastY = e.clientY;
+        this.crownDragAccumPx = 0;
         this.controls.enabled = false;
         this.renderer.domElement.style.cursor = 'ns-resize';
-      } else if (hitAction === 'bezel') {
+      } else if (caps.bezelDirection !== 'none' && hitAction === 'bezel') {
         this.isBezelDragging = true;
         this.bezelDragLastX = e.clientX;
         this.bezelDragAccumPx = 0;
@@ -694,13 +765,37 @@ export class WatchStudioEngine {
       const dy = this.crownDragLastY - e.clientY;
       this.crownDragLastY = e.clientY;
       if (Math.abs(dy) > 0) {
-        this.manualTimeTargetSec += dy * 90;
-        this.crownSpinVel += dy * 0.45;
-        this.powerReservePct = THREE.MathUtils.clamp(
-          this.powerReservePct + Math.abs(dy) * 0.25,
-          0,
-          100
-        );
+        const caps = resolveWatchCapabilities(getWatchById(this.state.modelId));
+        if (this.state.crownPosition === 1 && caps.supportsManualWind) {
+          this.crownSpinVel += dy * 0.65;
+          this.powerReservePct = THREE.MathUtils.clamp(
+            this.powerReservePct + Math.abs(dy) * 0.35,
+            0,
+            100
+          );
+          this.onPowerReserveChangeCb?.(Math.round(this.powerReservePct));
+        } else if (this.state.crownPosition === 2 && caps.supportsQuickSetDate) {
+          this.crownSpinVel += dy * 0.5;
+          this.crownDragAccumPx += dy;
+          const stepThreshold = 22;
+          if (Math.abs(this.crownDragAccumPx) >= stepThreshold) {
+            const steps = Math.trunc(this.crownDragAccumPx / stepThreshold);
+            this.crownDragAccumPx -= steps * stepThreshold;
+            if (steps !== 0) {
+              this.quickSetDateDays(steps);
+            }
+          }
+        } else if (this.state.crownPosition === 3) {
+          this.manualTimeTargetSec += dy * 90;
+          this.crownSpinVel += dy * 0.45;
+          if (caps.supportsManualWind) {
+            this.powerReservePct = THREE.MathUtils.clamp(
+              this.powerReservePct + Math.abs(dy) * 0.25,
+              0,
+              100
+            );
+          }
+        }
       }
       return;
     }
@@ -745,7 +840,7 @@ export class WatchStudioEngine {
     if (hits.length > 0) {
       const act = hits[0].object.userData.interactive;
       this.renderer.domElement.style.cursor =
-        this.state.crownPulled && act === 'crown'
+        this.state.crownPosition > 0 && act === 'crown'
           ? 'ns-resize'
           : act === 'bezel'
             ? 'ew-resize'
@@ -761,6 +856,7 @@ export class WatchStudioEngine {
       this.isCrownDragging = false;
       this.isBezelDragging = false;
       this.bezelDragAccumPx = 0;
+      this.crownDragAccumPx = 0;
       this.controls.enabled = true;
       this.renderer.domElement.style.cursor = '';
     }
@@ -773,6 +869,7 @@ export class WatchStudioEngine {
       this.isCrownDragging = false;
       this.isBezelDragging = false;
       this.bezelDragAccumPx = 0;
+      this.crownDragAccumPx = 0;
       this.controls.enabled = true;
       this.renderer.domElement.style.cursor = '';
     }
@@ -795,13 +892,26 @@ export class WatchStudioEngine {
     if (hits.length === 0) return;
 
     const action = hits[0].object.userData.interactive;
+    const caps = resolveWatchCapabilities(getWatchById(this.state.modelId));
     if (action === 'bezel') {
-      this.rotateBezelStep();
+      if (caps.bezelDirection !== 'none') {
+        this.rotateBezelStep(1);
+      }
     } else if (action === 'crown') {
-      const nextPulled = !this.state.crownPulled;
-      this.state.crownPulled = nextPulled;
-      this.onCrownPullChangeCb?.(nextPulled);
-      this.windCrownImpulse();
+      if (caps.crownMode === 'none') return;
+      const cycle: CrownPosition[] = [0, ...caps.crownStops.map((s) => s.pos)];
+      const curIdx = cycle.indexOf(this.state.crownPosition);
+      const nextPos = cycle[(curIdx + 1) % cycle.length];
+      this.state.crownPosition = nextPos;
+      if (nextPos !== 3) {
+        this.hackedSecondValue = null;
+      }
+      this.onCrownPositionChangeCb?.(nextPos);
+      if (nextPos === 1 && caps.supportsManualWind) {
+        this.windCrownImpulse();
+      } else {
+        horologyAudio.playBezelClick();
+      }
     } else if (action === 'clasp') {
       const nextOpen = !this.state.claspOpen;
       this.state.claspOpen = nextOpen;
@@ -868,10 +978,14 @@ export class WatchStudioEngine {
 
   public rotateBezelStep(steps = 1) {
     const watch = getWatchById(this.state.modelId);
+    const caps = resolveWatchCapabilities(watch);
+    if (caps.bezelDirection === 'none') return;
+    // ISO 6425 unidirectional dive bezels only ratchet counter-clockwise (forward elapsed time)
+    if (caps.bezelDirection === 'unidirectional' && steps < 0) return;
     const stepAngle =
       watch.bezelType === 'gmt-cerachrom'
         ? Math.PI / 12
-        : watch.bezelType === 'navitimer'
+        : watch.bezelType === 'navitimer' || watch.bezelType === 'yacht-cerachrom'
           ? Math.PI / 30
           : Math.PI / 15;
     this.bezelTargetAngle -= stepAngle * steps;
@@ -886,6 +1000,8 @@ export class WatchStudioEngine {
   }
 
   public windCrownImpulse() {
+    const caps = resolveWatchCapabilities(getWatchById(this.state.modelId));
+    if (!caps.supportsManualWind) return;
     this.crownSpinVel += 18;
     this.rotorAngularVel += 4.2;
     this.powerReservePct = Math.min(100, this.powerReservePct + 14);
@@ -899,6 +1015,27 @@ export class WatchStudioEngine {
     this.powerReservePct = Math.min(100, this.powerReservePct + 11);
     this.onPowerReserveChangeCb?.(Math.round(this.powerReservePct));
     horologyAudio.playPusherClick();
+  }
+
+  public triggerWristRoll() {
+    this.wristRollRemainingSec = 2.8;
+    this.rotorAngularVel += 14.5;
+    this.powerReservePct = Math.min(100, this.powerReservePct + 10);
+    this.onPowerReserveChangeCb?.(Math.round(this.powerReservePct));
+    horologyAudio.playPusherClick();
+  }
+
+  public quickSetDateDays(delta: number) {
+    this.quickSetDayOffset += delta;
+    this.crownSpinVel += delta >= 0 ? 12 : -12;
+    this.syncMidnightDateOverride(true);
+    horologyAudio.playBezelClick();
+  }
+
+  public quickSetMoonphaseDays(delta: number) {
+    this.quickSetMoonDays += delta;
+    this.crownSpinVel += delta >= 0 ? 10 : -10;
+    horologyAudio.playBezelClick();
   }
 
   public advanceManualTime(minutesDelta: number) {
@@ -918,7 +1055,10 @@ export class WatchStudioEngine {
 
   public resetManualTime() {
     this.manualTimeTargetSec = 0;
+    this.quickSetDayOffset = 0;
+    this.quickSetMoonDays = 0;
     this.crownSpinVel -= 10;
+    this.syncMidnightDateOverride(true);
   }
 
   public setLoupeTarget(canvas: HTMLCanvasElement | null, nx: number, ny: number) {
@@ -1020,6 +1160,12 @@ export class WatchStudioEngine {
 
     const beltShade = resolveBeltShade(watch, this.state.beltShadeId ?? 'default');
     const lumePalette = resolveLumePalette(watch);
+    const caseFinish =
+      watch.brand === 'CASIO' && alloy.id === 'default'
+        ? 'resin'
+        : watch.id === 'bulgari-octo-finissimo' && alloy.id === 'default'
+          ? 'sandblasted'
+          : 'standard';
     this.currentMats = createWatchMaterialSet(
       alloy,
       this.isSoftwareGl,
@@ -1027,7 +1173,9 @@ export class WatchStudioEngine {
       this.maxAnisotropy,
       this.state.patina,
       beltShade,
-      lumePalette
+      lumePalette,
+      this.state.wristStyle,
+      caseFinish
     );
     this.currentRig = buildWatchAssembly(
       watch,
@@ -1076,6 +1224,12 @@ export class WatchStudioEngine {
 
     const compareBeltShade = resolveBeltShade(watch, this.state.beltShadeId ?? 'default');
     const compareLumePalette = resolveLumePalette(watch);
+    const compareCaseFinish =
+      watch.brand === 'CASIO'
+        ? 'resin'
+        : watch.id === 'bulgari-octo-finissimo'
+          ? 'sandblasted'
+          : 'standard';
     this.compareMats = createWatchMaterialSet(
       alloy,
       this.isSoftwareGl,
@@ -1083,7 +1237,9 @@ export class WatchStudioEngine {
       this.maxAnisotropy,
       0,
       compareBeltShade,
-      compareLumePalette
+      compareLumePalette,
+      undefined,
+      compareCaseFinish
     );
     this.compareRig = buildWatchAssembly(
       watch,
@@ -1232,16 +1388,15 @@ export class WatchStudioEngine {
     }
   }
 
-  private applyExplodeToRig(rig: WatchRig, watch: WatchSpec, e: number) {
-    const { layers } = rig;
-    const caseDepth = watch.caseThicknessMm / 10;
+  private applyExplodeToRig(rig: WatchRig, _watch: WatchSpec, e: number) {
+    const { layers, baseLayerZ } = rig;
 
-    layers.crystalGroup.position.z = 0.525 + e * 1.95;
-    layers.bezelGroup.position.z = 0.4 + e * 1.25;
-    layers.handsGroup.position.z = 0.24 + e * 0.76;
-    layers.dialGroup.position.z = 0.0 + e * 0.36;
-    layers.caliberGroup.position.z = -0.14 - e * 0.74;
-    layers.casebackGroup.position.z = -caseDepth * 0.4 - e * 1.45;
+    layers.crystalGroup.position.z = baseLayerZ.crystal + e * 1.95;
+    layers.bezelGroup.position.z = baseLayerZ.bezel + e * 1.25;
+    layers.handsGroup.position.z = baseLayerZ.hands + e * 0.76;
+    layers.dialGroup.position.z = baseLayerZ.dial + e * 0.36;
+    layers.caliberGroup.position.z = baseLayerZ.caliber - e * 0.74;
+    layers.casebackGroup.position.z = baseLayerZ.caseback - e * 1.45;
   }
 
   private applyExplodePositions(e: number) {
@@ -1276,6 +1431,8 @@ export class WatchStudioEngine {
       (next.patina !== undefined && next.patina !== this.state.patina);
     const beltShadeChanged =
       next.beltShadeId !== undefined && next.beltShadeId !== this.state.beltShadeId;
+    const wristStyleChanged =
+      next.wristStyle !== undefined && next.wristStyle !== this.state.wristStyle;
     const dialChanged =
       next.dialId !== undefined && next.dialId !== this.state.dialId;
     const bezelChanged =
@@ -1290,6 +1447,9 @@ export class WatchStudioEngine {
       next.customEngraving !== this.state.customEngraving;
     const liveTimeChanged =
       next.liveTime !== undefined && next.liveTime !== this.state.liveTime;
+    const crownChanged =
+      next.crownPosition !== undefined &&
+      next.crownPosition !== this.state.crownPosition;
     const overlayChanged =
       (next.wetStage !== undefined && next.wetStage !== this.state.wetStage) ||
       (next.wristMode !== undefined && next.wristMode !== this.state.wristMode) ||
@@ -1304,12 +1464,20 @@ export class WatchStudioEngine {
 
     Object.assign(this.state, next);
 
+    if (crownChanged && this.state.crownPosition !== 3) {
+      this.hackedSecondValue = null;
+    }
+
     if (modelChanged) {
       this.chronoSplitSec = null;
+      this.quickSetDayOffset = 0;
+      this.quickSetMoonDays = 0;
+      this.hackedSecondValue = null;
       this.entrySpinY = -0.72;
       this.rotorAngularVel += 6.2;
       horologyAudio.playBezelClick();
       this.emitChronoTelemetry(true);
+      this.syncMidnightDateOverride(false);
     }
 
     if (liveTimeChanged) {
@@ -1324,10 +1492,18 @@ export class WatchStudioEngine {
     } else {
       const watch = getWatchById(this.state.modelId);
       if (alloyChanged && this.currentMats) {
+        const nextAlloy = resolveAlloy(watch, this.state.alloyId);
+        const nextCaseFinish =
+          watch.brand === 'CASIO' && nextAlloy.id === 'default'
+            ? 'resin'
+            : watch.id === 'bulgari-octo-finissimo' && nextAlloy.id === 'default'
+              ? 'sandblasted'
+              : 'standard';
         applyAlloyToMaterialSet(
           this.currentMats,
-          resolveAlloy(watch, this.state.alloyId),
-          this.state.patina
+          nextAlloy,
+          this.state.patina,
+          nextCaseFinish
         );
       }
       if (beltShadeChanged && this.currentMats) {
@@ -1335,6 +1511,9 @@ export class WatchStudioEngine {
           this.currentMats,
           resolveBeltShade(watch, this.state.beltShadeId ?? 'default')
         );
+      }
+      if (wristStyleChanged && this.currentMats) {
+        applyWristStyleToMaterialSet(this.currentMats, this.state.wristStyle);
       }
       if (dialChanged && this.currentRig) {
         this.currentRig.updateDialTexture(
@@ -1352,6 +1531,7 @@ export class WatchStudioEngine {
         );
       }
       if (compareChanged) {
+        this.syncMidnightDateOverride(false);
         this.rebuildCompareWatch();
       }
       if (xrayChanged) {
@@ -1478,13 +1658,19 @@ export class WatchStudioEngine {
     const lugToLug =
       watch.lugToLugMm ?? Number((watch.caseDiameterMm + 7.2).toFixed(1));
     const caseR =
-      watch.id === 'jlc-reverso' ? 1.55 : (watch.caseDiameterMm / 10) * 0.5;
+      watch.id === 'jlc-reverso'
+        ? 1.55
+        : watch.id === 'cartier-tank-louis'
+          ? 1.32
+          : (watch.caseDiameterMm / 10) * 0.5;
     const lugR =
       watch.caseShape === 'rectangular'
         ? caseR * 1.48
         : watch.caseShape === 'tonneau'
           ? caseR * 1.15
-          : caseR;
+          : watch.caseShape === 'compact-octagon'
+            ? caseR * 1.04
+            : caseR;
 
     const specs: {
       id: string;
@@ -1621,6 +1807,7 @@ export class WatchStudioEngine {
       gearWheels,
       perpetualRotor,
       balanceWheel,
+      dialBalanceWheel,
       palletFork,
       hairspring,
       tourbillonCage,
@@ -1636,17 +1823,35 @@ export class WatchStudioEngine {
     let hr12Val = 10 + 10 / 60;
     let minVal = 10;
 
+    const beatProfile = resolveCaliberBeatProfile(watchSpec);
+    const rigCaps = resolveWatchCapabilities(watchSpec);
+    const isHacked =
+      isPrimary &&
+      this.state.crownPosition === 3 &&
+      rigCaps.supportsHacking &&
+      !beatProfile.isSpringDrive &&
+      !beatProfile.isQuartz;
+
     if (this.state.liveTime) {
       const localMs = effectiveNowMs - TZ_OFFSET_MS;
       const totalWholeSec = Math.floor(localMs / 1000);
       const subMs = localMs - totalWholeSec * 1000;
-      const beatsPerSec = (watchSpec.highBeatHz ?? 4) * 2;
-      const fracSec = watchSpec.isSpringDrive
+      const beatsPerSec = beatProfile.beatHz * 2;
+      const fracSec = beatProfile.isSpringDrive
         ? subMs / 1000
-        : Math.floor((subMs / 1000) * beatsPerSec) / beatsPerSec;
+        : beatsPerSec > 0
+          ? Math.floor((subMs / 1000) * beatsPerSec) / beatsPerSec
+          : 0;
 
       const secWhole = ((totalWholeSec % 60) + 60) % 60;
-      const sec = secWhole + fracSec;
+      let sec = secWhole + fracSec;
+      if (isHacked) {
+        if (this.hackedSecondValue === null) {
+          this.hackedSecondValue = sec;
+        }
+        sec = this.hackedSecondValue;
+      }
+
       const minWhole = ((Math.floor(totalWholeSec / 60) % 60) + 60) % 60;
       minVal = minWhole + sec / 60;
       const hrWhole = ((Math.floor(totalWholeSec / 3600) % 24) + 24) % 24;
@@ -1672,10 +1877,21 @@ export class WatchStudioEngine {
         skyDisc.rotation.z = (gmtHr / 24) * Math.PI * 2;
       }
     } else {
-      const beatsPerSec = (watchSpec.highBeatHz ?? 4) * 2;
-      const fracSec = watchSpec.isSpringDrive
-        ? this.chronoDisplayElapsed % 60
-        : Math.floor((this.chronoDisplayElapsed % 60) * beatsPerSec) / beatsPerSec;
+      const beatsPerSec = beatProfile.beatHz * 2;
+      const rawSec = this.chronoDisplayElapsed % 60;
+      const fracSec = beatProfile.isSpringDrive
+        ? rawSec
+        : beatsPerSec > 0
+          ? Math.floor(rawSec * beatsPerSec) / beatsPerSec
+          : rawSec;
+      let studioSec = 36 + fracSec;
+      if (isHacked) {
+        if (this.hackedSecondValue === null) {
+          this.hackedSecondValue = studioSec;
+        }
+        studioSec = this.hackedSecondValue;
+      }
+
       const studioOffsetMin = this.manualTimeOffsetSec / 60;
       const studioTotalMin = 10 * 60 + 10 + studioOffsetMin;
       minVal = ((studioTotalMin % 60) + 60) % 60;
@@ -1684,7 +1900,7 @@ export class WatchStudioEngine {
 
       hourHand.rotation.z = -(hr12Val / 12) * Math.PI * 2;
       minuteHand.rotation.z = -(minVal / 60) * Math.PI * 2;
-      secondHand.rotation.z = -((36 + fracSec) / 60) * Math.PI * 2;
+      secondHand.rotation.z = -(studioSec / 60) * Math.PI * 2;
 
       const studioGmtHr =
         (((9 + 10 / 60 + studioOffsetMin / 60 + this.state.gmtTimezoneOffset) % 24) +
@@ -1716,11 +1932,16 @@ export class WatchStudioEngine {
           ? THREE.MathUtils.lerp(Math.PI * 0.65, -Math.PI * 0.05, pct)
           : watchSpec.id === 'iwc-big-pilot'
             ? THREE.MathUtils.lerp(-Math.PI * 0.84, -Math.PI * 0.16, pct)
-            : THREE.MathUtils.lerp(-Math.PI * 0.35, Math.PI * 0.35, pct);
+            : watchSpec.id === 'mbf-lm101'
+              ? THREE.MathUtils.lerp(Math.PI * 0.72, -Math.PI * 0.72, pct)
+              : THREE.MathUtils.lerp(-Math.PI * 0.35, Math.PI * 0.35, pct);
     }
 
     if (moonphaseDisc) {
-      const lunarPhase = (effectiveNowMs / (29.530588 * 86400000)) * Math.PI * 2;
+      const moonNowMs =
+        effectiveNowMs +
+        (this.quickSetDayOffset + this.quickSetMoonDays) * 86400000;
+      const lunarPhase = (moonNowMs / (29.530588 * 86400000)) * Math.PI * 2;
       moonphaseDisc.rotation.z = -lunarPhase;
     }
 
@@ -1759,21 +1980,47 @@ export class WatchStudioEngine {
       gearWheels[g].rotation.z = elapsed * (g % 2 === 0 ? 0.44 : -0.58);
     }
 
-    const beatOmega = Math.PI * ((watchSpec.highBeatHz ?? 4) * 2);
-    balanceWheel.rotation.z = Math.sin(elapsed * beatOmega) * 0.45;
-    hairspring.scale.setScalar(1 + Math.sin(elapsed * beatOmega) * 0.065);
-    palletFork.rotation.z = Math.sin(elapsed * beatOmega + 0.35) * 0.19;
-    if (tourbillonCage) {
+    if (isHacked || beatProfile.isQuartz) {
+      balanceWheel.rotation.z = 0;
+      if (dialBalanceWheel) dialBalanceWheel.rotation.z = 0;
+      hairspring.scale.setScalar(1);
+      palletFork.rotation.z = 0;
+    } else if (beatProfile.isSpringDrive) {
+      balanceWheel.rotation.z = elapsed * Math.PI * 10;
+      if (dialBalanceWheel) dialBalanceWheel.rotation.z = elapsed * Math.PI * 10;
+      hairspring.scale.setScalar(1);
+      palletFork.rotation.z = 0;
+    } else {
+      const beatOmega = Math.PI * (beatProfile.beatHz * 2);
+      const osc = Math.sin(elapsed * beatOmega) * 0.45;
+      balanceWheel.rotation.z = osc;
+      if (dialBalanceWheel) dialBalanceWheel.rotation.z = osc;
+      hairspring.scale.setScalar(1 + Math.sin(elapsed * beatOmega) * 0.065);
+      palletFork.rotation.z = Math.sin(elapsed * beatOmega + 0.35) * 0.19;
+    }
+    if (tourbillonCage && !isHacked) {
       tourbillonCage.rotation.z = -elapsed * ((Math.PI * 2) / 60);
     }
     perpetualRotor.rotation.z = this.rotorAngle + Math.sin(elapsed * 0.65) * 0.08;
 
+    let wristRollX = 0;
+    let wristRollY = 0;
+    let wristRollZ = 0;
+    if (isPrimary && this.wristRollRemainingSec > 0) {
+      const p = 1 - this.wristRollRemainingSec / 2.8;
+      const env = Math.sin(p * Math.PI);
+      wristRollX = Math.sin(p * Math.PI * 2) * 0.34 * env;
+      wristRollY = Math.sin(p * Math.PI * 1.5) * 0.58 * env;
+      wristRollZ = Math.sin(p * Math.PI * 2) * 0.24 * env;
+    }
+
     rig.watchTiltGroup.position.y = 3.55 + floatWave * 0.11;
     rig.watchTiltGroup.rotation.x =
-      -0.3 + this.cursorTiltY * (this.state.flipped ? -1 : 1);
-    rig.watchTiltGroup.rotation.y = this.flipCurrentY + (isPrimary ? this.entrySpinY : 0);
+      -0.3 + this.cursorTiltY * (this.state.flipped ? -1 : 1) + wristRollX;
+    rig.watchTiltGroup.rotation.y =
+      this.flipCurrentY + (isPrimary ? this.entrySpinY : 0) + wristRollY;
     rig.watchTiltGroup.rotation.z =
-      Math.sin(elapsed * 0.78) * 0.024 - this.cursorTiltX;
+      Math.sin(elapsed * 0.78) * 0.024 - this.cursorTiltX + wristRollZ;
     rig.shadowMesh.scale.set(shadowScale, shadowScale, 1);
   }
 
@@ -1975,8 +2222,13 @@ export class WatchStudioEngine {
     this.rotorAngularVel *= Math.exp(-1.9 * delta);
     this.rotorAngle += this.rotorAngularVel * delta;
 
+    if (this.wristRollRemainingSec > 0) {
+      this.wristRollRemainingSec = Math.max(0, this.wristRollRemainingSec - delta);
+    }
+
     // Shared mechanical transitions updated once per frame
-    const targetCrownPull = this.state.crownPulled ? 0.125 : 0;
+    const crownOffsets = [0, 0.048, 0.09, 0.138];
+    const targetCrownPull = crownOffsets[this.state.crownPosition] ?? 0;
     this.crownPullPos = THREE.MathUtils.damp(this.crownPullPos, targetCrownPull, 12, delta);
     if (Math.abs(this.crownSpinVel) > 0.01) {
       this.crownAngle += this.crownSpinVel * delta;
@@ -2061,11 +2313,24 @@ export class WatchStudioEngine {
     }
 
     const activeWatchSpec = getWatchById(this.state.modelId);
-    const currentBeat = Math.floor(elapsed * ((activeWatchSpec.highBeatHz ?? 4) * 2));
-    if (currentBeat !== this.lastTickStep) {
+    const activeBeatProfile = resolveCaliberBeatProfile(activeWatchSpec);
+    const activeCaps = resolveWatchCapabilities(activeWatchSpec);
+    const isActiveHacked =
+      this.state.crownPosition === 3 &&
+      activeCaps.supportsHacking &&
+      !activeBeatProfile.isSpringDrive &&
+      !activeBeatProfile.isQuartz;
+    const beatsPerSec = activeBeatProfile.isSpringDrive
+      ? 0
+      : activeBeatProfile.beatHz * 2;
+    const currentBeat = beatsPerSec > 0 ? Math.floor(elapsed * beatsPerSec) : 0;
+    if (!activeBeatProfile.isSpringDrive && !isActiveHacked && currentBeat !== this.lastTickStep) {
       this.lastTickStep = currentBeat;
       if (this.state.soundEnabled) {
-        horologyAudio.playEscapementTick(currentBeat % 2 === 0);
+        horologyAudio.playEscapementTick(
+          currentBeat % 2 === 0,
+          activeBeatProfile.isQuartz ? 1.22 : activeBeatProfile.beatHz / 4
+        );
       }
     }
 
@@ -2081,7 +2346,7 @@ export class WatchStudioEngine {
         floatWave,
         shadowScale,
         true,
-        getWatchById(this.state.modelId)
+        activeWatchSpec
       );
     }
     if (this.compareRig && this.state.compareModelId) {
@@ -2097,7 +2362,7 @@ export class WatchStudioEngine {
     }
 
     if (
-      this.state.lightingMode === 'nocturne' &&
+      (this.state.lightingMode === 'nocturne' || this.lumeCharge > 0.08) &&
       !this.isSoftwareGl &&
       this.composer
     ) {
@@ -2121,6 +2386,13 @@ export class WatchStudioEngine {
     this.emitChronoTelemetry(false);
     this.emitExplodeCallouts(nowMs);
     this.emitCaliperCallouts(nowMs);
+    this.emitTimegrapherTelemetry(
+      nowMs,
+      activeWatchSpec,
+      activeBeatProfile,
+      currentBeat,
+      isActiveHacked
+    );
 
     if (this.isSoftwareGl) {
       this.afterDraw(this.tick);
@@ -2128,6 +2400,73 @@ export class WatchStudioEngine {
       this.frameId = requestAnimationFrame(this.tick);
     }
   };
+
+  private emitTimegrapherTelemetry(
+    nowMs: number,
+    watch: WatchSpec,
+    profile: CaliberBeatProfile,
+    tickIndex: number,
+    isHacked: boolean
+  ) {
+    if (!this.state.timegrapherMode || !this.onTimegrapherTelemetryCb) return;
+    if (nowMs - this.lastTimegrapherEmit < 130) return;
+    this.lastTimegrapherEmit = nowMs;
+
+    let positionLabel = 'Dial Up (DU)';
+    let positionalBias = 0.6;
+    let positionalAmpDrop = 0;
+
+    if (this.flipCurrentY > Math.PI * 0.5) {
+      positionLabel = 'Caseback Up (PD)';
+      positionalBias = 1.1;
+      positionalAmpDrop = 4;
+    } else if (Math.abs(this.camera.position.x) > 4.6) {
+      positionLabel = 'Crown Down (9H/3H)';
+      positionalBias = -0.8;
+      positionalAmpDrop = 22;
+    } else if (this.camera.position.y < 3.7 && this.camera.position.z > 3.2) {
+      positionLabel = '12h Up (Vert)';
+      positionalBias = -0.3;
+      positionalAmpDrop = 16;
+    }
+
+    const reserveFactor = THREE.MathUtils.clamp(this.powerReservePct / 100, 0.15, 1);
+    const amplitudeDeg =
+      isHacked || profile.isQuartz || profile.isSpringDrive
+        ? 0
+        : Math.round(215 + reserveFactor * 94 - positionalAmpDrop);
+    const rateSecPerDay = profile.isSpringDrive
+      ? 0.1
+      : profile.isQuartz
+        ? 0.0
+        : Number(
+            (
+              positionalBias +
+              (watch.brand === 'ROLEX' ? 0.1 : watch.brand === 'ZENITH' ? 0.4 : -0.2) +
+              (reserveFactor < 0.35 ? -0.9 : 0)
+            ).toFixed(1)
+          );
+    const beatErrorMs =
+      isHacked || profile.isQuartz || profile.isSpringDrive
+        ? 0
+        : positionalAmpDrop > 10
+          ? 0.2
+          : 0.1;
+
+    this.onTimegrapherTelemetryCb({
+      positionLabel,
+      vph: profile.vph,
+      beatHz: profile.beatHz,
+      isSpringDrive: profile.isSpringDrive,
+      isQuartz: profile.isQuartz,
+      isHacked,
+      amplitudeDeg,
+      beatErrorMs,
+      rateSecPerDay,
+      liftAngleDeg: profile.liftAngleDeg,
+      tickIndex,
+    });
+  }
 
   public dispose() {
     this.disposed = true;

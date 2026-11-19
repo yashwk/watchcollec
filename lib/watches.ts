@@ -9,7 +9,8 @@ export type WatchCategoryId =
   | 'chronograph'
   | 'gmt-travel'
   | 'dress-classic'
-  | 'shaped-icons';
+  | 'shaped-icons'
+  | 'independent';
 export type WatchModelId =
   | 'submariner'
   | 'daytona'
@@ -37,7 +38,26 @@ export type WatchModelId =
   | 'breguet-classique'
   | 'gs-snowflake'
   | 'lange-1'
-  | 'rm-tonneau';
+  | 'rm-tonneau'
+  | 'fpj-chronometre-bleu'
+  | 'moser-streamliner'
+  | 'mbf-lm101'
+  | 'bulgari-octo-finissimo'
+  | 'pp-worldtime'
+  | 'longines-zulu-time'
+  | 'hamilton-murph'
+  | 'nomos-tangente'
+  | 'blancpain-fifty-fathoms'
+  | 'doxa-sub300'
+  | 'cartier-tank-louis'
+  | 'cartier-crash'
+  | 'gs-white-birch'
+  | 'gp-laureato'
+  | 'piaget-polo-79'
+  | 'lange-zeitwerk'
+  | 'casio-gshock-dw5600'
+  | 'casio-casioak-ga2100'
+  | 'casio-f91w';
 
 export type AlloyId = 'default' | 'oystersteel' | 'yellow-gold' | 'everose' | 'rolesor';
 export type DialId =
@@ -70,6 +90,29 @@ export type BeltShadeId =
   | 'obsidian';
 export type CameraPresetId = 'hero' | 'dial' | 'profile' | 'caliber';
 export type LightingModeId = 'atelier' | 'vault' | 'nocturne' | 'alpine' | 'bronze';
+export type CrownPosition = 0 | 1 | 2 | 3;
+export type WristStyleId = 'slate-mannequin' | 'navy-tailor' | 'espresso-suede';
+
+export interface WristStyleOption {
+  id: WristStyleId;
+  label: string;
+  swatchHex: string;
+}
+
+export const WRIST_STYLE_OPTIONS: WristStyleOption[] = [
+  { id: 'slate-mannequin', label: 'Atelier Slate', swatchHex: '#22262b' },
+  { id: 'navy-tailor', label: 'Navy Suit', swatchHex: '#16243d' },
+  { id: 'espresso-suede', label: 'Espresso Suede', swatchHex: '#3b2618' },
+];
+
+export interface CaliberBeatProfile {
+  beatHz: number;
+  vph: number;
+  isSpringDrive: boolean;
+  isQuartz: boolean;
+  liftAngleDeg: number;
+  label: string;
+}
 
 export type WatchBrand =
   | 'ROLEX'
@@ -89,7 +132,19 @@ export type WatchBrand =
   | 'GRAND SEIKO'
   | 'A. LANGE & SÖHNE'
   | 'RICHARD MILLE'
-  | 'AVI-8';
+  | 'AVI-8'
+  | 'F.P. JOURNE'
+  | 'H. MOSER & CIE'
+  | 'MB&F'
+  | 'BULGARI'
+  | 'LONGINES'
+  | 'HAMILTON'
+  | 'NOMOS GLASHÜTTE'
+  | 'BLANCPAIN'
+  | 'DOXA'
+  | 'GIRARD-PERREGAUX'
+  | 'PIAGET'
+  | 'CASIO';
 
 export interface WatchBrandMeta {
   id: WatchBrand;
@@ -112,9 +167,21 @@ export const WATCH_BRANDS: WatchBrandMeta[] = [
   { id: 'ZENITH', origin: 'Le Locle · Switzerland', heritage: '36,000 vph High-Frequency Calibers' },
   { id: 'IWC SCHAFFHAUSEN', origin: 'Schaffhausen · Switzerland', heritage: 'Probus Scafusia Pilot Instruments' },
   { id: 'BREGUET', origin: 'Vallée de Joux · Switzerland', heritage: 'Guilloché & Pomme Hands Craft' },
-  { id: 'GRAND SEIKO', origin: 'Shiojiri · Japan', heritage: 'Spring Drive & Zaratsu Craft' },
+  { id: 'GRAND SEIKO', origin: 'Shiojiri · Japan', heritage: 'Spring Drive, Hi-Beat & Zaratsu' },
   { id: 'A. LANGE & SÖHNE', origin: 'Glashütte · Germany', heritage: 'Saxon High Watchmaking' },
   { id: 'RICHARD MILLE', origin: 'Les Breuleux · Switzerland', heritage: 'Avant-Garde Skeleton Racing' },
+  { id: 'F.P. JOURNE', origin: 'Geneva · Switzerland', heritage: 'Invenit et Fecit Solid-Gold Calibers' },
+  { id: 'H. MOSER & CIE', origin: 'Schaffhausen · Switzerland', heritage: 'Minimalist Fumé Concept Watchmaking' },
+  { id: 'MB&F', origin: 'Geneva · Switzerland', heritage: 'Kinetic Horological Machines' },
+  { id: 'BULGARI', origin: 'Rome · Italy / Le Sentier', heritage: 'Record-Breaking Ultra-Thin Architecture' },
+  { id: 'BLANCPAIN', origin: 'Le Brassus · Switzerland', heritage: '1953 Modern Diver Pioneers' },
+  { id: 'DOXA', origin: 'Biel · Switzerland', heritage: 'High-Visibility Professional Saturation Divers' },
+  { id: 'GIRARD-PERREGAUX', origin: 'La Chaux-de-Fonds · Switzerland', heritage: '1975 Integrated Octagonal Sport' },
+  { id: 'PIAGET', origin: 'La Côte-aux-Fées · Switzerland', heritage: 'Ultra-Thin Gold Sculptural Horology' },
+  { id: 'LONGINES', origin: 'Saint-Imier · Switzerland', heritage: 'Winged Hourglass Dual-Time Pioneers' },
+  { id: 'HAMILTON', origin: 'Lancaster PA / Biel', heritage: 'Field & Cinema Mechanical Icons' },
+  { id: 'NOMOS GLASHÜTTE', origin: 'Glashütte · Germany', heritage: 'Bauhaus Precision & Ultra-Thin Calibers' },
+  { id: 'CASIO', origin: 'Tokyo · Japan', heritage: 'Shock-Resistant Digital & Ana-Digi Legends' },
   { id: 'AVI-8', origin: 'London · United Kingdom', heritage: 'Aviation Instrument Tributes' },
 ];
 
@@ -168,7 +235,15 @@ export interface WatchSpec {
   yearIntroduced: string;
   tagline: string;
   description: string;
-  caseShape?: 'round' | 'octagonal' | 'cushion' | 'square' | 'rectangular' | 'tonneau';
+  caseShape?:
+    | 'round'
+    | 'octagonal'
+    | 'compact-octagon'
+    | 'cushion'
+    | 'square'
+    | 'rectangular'
+    | 'tonneau'
+    | 'crash';
   caseDiameterMm: number;
   caseThicknessMm: number;
   lugToLugMm?: number;
@@ -193,7 +268,18 @@ export interface WatchSpec {
     | 'reverso'
     | 'tonneau';
   braceletType: 'oyster' | 'jubilee' | 'president' | 'royal-oak' | 'nautilus' | 'santos';
-  handStyle?: 'classic' | 'snowflake' | 'skeleton-sword' | 'breguet-pomme' | 'pilot-sword';
+  handStyle?:
+    | 'classic'
+    | 'snowflake'
+    | 'skeleton-sword'
+    | 'breguet-pomme'
+    | 'pilot-sword'
+    | 'cathedral'
+    | 'syringe'
+    | 'dauphine'
+    | 'worldtime-ring'
+    | 'octo-skeleton'
+    | 'leaf';
   hasCyclops: boolean;
   hasDateWindow?: boolean;
   hasDayWindow?: boolean;
@@ -205,7 +291,7 @@ export interface WatchSpec {
   leftCrown?: boolean;
   highDomeSapphire?: boolean;
   highBeatHz?: number;
-  hasSmallSeconds?: 6 | 9;
+  hasSmallSeconds?: 6 | 7.5 | 9;
   hasChronoPushers: boolean;
   hasChronoSubdials?: 2 | 3;
   hasGmtHand: boolean;
@@ -219,6 +305,10 @@ export interface WatchSpec {
   isSpringDrive?: boolean;
   hasReversoFlip?: boolean;
   hasBigDate?: boolean;
+  isDigitalDisplay?: boolean;
+  isJumpingDigital?: boolean;
+  hasFloatingBalance?: boolean;
+  hasWorldTimeRing?: boolean;
   gmtHandColorHex?: number;
   defaultAlloy: Exclude<AlloyId, 'default'>;
   defaultDial: DialId;
@@ -235,6 +325,7 @@ export const WATCH_CATEGORIES: { id: WatchCategoryId; label: string; shortLabel:
   { id: 'gmt-travel', label: 'GMT & Travel', shortLabel: 'GMT' },
   { id: 'dress-classic', label: 'Dress & Heritage', shortLabel: 'Dress' },
   { id: 'shaped-icons', label: 'Shaped Icons', shortLabel: 'Shaped' },
+  { id: 'independent', label: 'Independent & Haute', shortLabel: 'Indep.' },
 ];
 
 export const WATCH_MODELS: WatchSpec[] = [
@@ -1124,6 +1215,691 @@ export const WATCH_MODELS: WatchSpec[] = [
     bezelPrimaryHex: '#E0E4E8',
     image: datejustImg,
   },
+  // --- PACK 1: INDEPENDENT & HAUTE HORLOGERIE ---
+  {
+    id: 'fpj-chronometre-bleu',
+    category: 'independent',
+    brand: 'F.P. JOURNE',
+    name: 'Chronomètre Bleu',
+    shortName: 'Chronomètre Bleu',
+    collection: 'Souveraine · Tantalum',
+    reference: 'CB-TAN-39',
+    yearIntroduced: '2009',
+    tagline: 'Blue-grey tantalum case & solid 18k rose-gold caliber.',
+    description:
+      'Milled from rare, dense blue-grey tantalum and paired with a seven-layer chrome-blue mirror dial, cream Journe numerals, 7:30 small seconds, and a solid 18k rose-gold Calibre 1304.',
+    caseShape: 'round',
+    caseDiameterMm: 39,
+    caseThicknessMm: 8.6,
+    lugToLugMm: 46.8,
+    caliber: 'Calibre 1304 (18k Rose Gold)',
+    frequency: '21,600 vph (3 Hz)',
+    powerReserve: '56 hours',
+    waterResistance: '30 m / 3 bar',
+    bezelType: 'smooth',
+    braceletType: 'president',
+    handStyle: 'syringe',
+    hasCyclops: false,
+    hasDateWindow: false,
+    hasCrownGuards: false,
+    hasSmallSeconds: 7.5,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'oystersteel',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'leather',
+    bezelPrimaryHex: '#6C798A',
+    image: datejustImg,
+  },
+  {
+    id: 'moser-streamliner',
+    category: 'independent',
+    brand: 'H. MOSER & CIE',
+    name: 'Streamliner Centre Seconds',
+    shortName: 'Streamliner',
+    collection: 'Matrix Green Fumé',
+    reference: '6200-1200',
+    yearIntroduced: '2020',
+    tagline: 'Zero-logo Matrix Green fumé dial in fluid cushion steel.',
+    description:
+      'Sculpted like a 1920s high-speed locomotive with a seamlessly integrated cushion case and dramatic sunburst Matrix Green fumé dial bearing a stealth transparent lacquer logo.',
+    caseShape: 'cushion',
+    caseDiameterMm: 40,
+    caseThicknessMm: 11.8,
+    lugToLugMm: 46.5,
+    caliber: 'Calibre HMC 200',
+    frequency: '21,600 vph (3 Hz)',
+    powerReserve: '72 hours',
+    waterResistance: '120 m / 12 bar',
+    bezelType: 'nautilus',
+    braceletType: 'nautilus',
+    handStyle: 'leaf',
+    hasCyclops: false,
+    hasDateWindow: false,
+    hasCrownGuards: false,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'oystersteel',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'bracelet',
+    bezelPrimaryHex: '#C8CFD6',
+    image: datejustImg,
+  },
+  {
+    id: 'mbf-lm101',
+    category: 'independent',
+    brand: 'MB&F',
+    name: 'Legacy Machine LM101',
+    shortName: 'Legacy LM101',
+    collection: 'Legacy Machine',
+    reference: 'LM101-WG-FROST',
+    yearIntroduced: '2014',
+    tagline: 'Suspended dial-side flying balance wheel under bubble dome.',
+    description:
+      'A three-dimensional tribute to 19th-century pocket chronometry: a monumental 14mm golden balance wheel suspended from twin mirror-polished arches above floating white lacquer sub-dials.',
+    caseShape: 'round',
+    caseDiameterMm: 40,
+    caseThicknessMm: 16.0,
+    lugToLugMm: 47.4,
+    caliber: 'MB&F × Kari Voutilainen LM101',
+    frequency: '18,000 vph (2.5 Hz)',
+    powerReserve: '45 hours',
+    waterResistance: '30 m / 3 bar',
+    bezelType: 'smooth',
+    braceletType: 'president',
+    handStyle: 'breguet-pomme',
+    hasCyclops: false,
+    hasDateWindow: false,
+    hasCrownGuards: false,
+    highDomeSapphire: true,
+    hasFloatingBalance: true,
+    hasPowerReserveHand: true,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'oystersteel',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'leather',
+    bezelPrimaryHex: '#D5D9DE',
+    image: datejustImg,
+  },
+  {
+    id: 'bulgari-octo-finissimo',
+    category: 'independent',
+    brand: 'BULGARI',
+    name: 'Octo Finissimo Automatic',
+    shortName: 'Octo Finissimo',
+    collection: 'Ultra-Thin Titanium',
+    reference: '102713',
+    yearIntroduced: '2017',
+    tagline: '5.15mm world-record micro-rotor octagonal architecture.',
+    description:
+      '110 razor-sharp architectural facets machined in monochrome sandblasted Grade 5 titanium, housing a 2.23mm platinum micro-rotor caliber and off-center small seconds.',
+    caseShape: 'octagonal',
+    caseDiameterMm: 40,
+    caseThicknessMm: 5.15,
+    lugToLugMm: 46.0,
+    caliber: 'Calibre BVL 138 Finissimo',
+    frequency: '21,600 vph (3 Hz)',
+    powerReserve: '60 hours',
+    waterResistance: '30 m / 3 bar',
+    bezelType: 'royal-oak',
+    braceletType: 'royal-oak',
+    handStyle: 'octo-skeleton',
+    hasCyclops: false,
+    hasDateWindow: false,
+    hasCrownGuards: false,
+    hasSmallSeconds: 7.5,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'oystersteel',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'bracelet',
+    bezelPrimaryHex: '#9AA0A6',
+    image: datejustImg,
+  },
+  // --- PACK 2: WORLDTIMERS, FIELD & EXPLORATION ---
+  {
+    id: 'pp-worldtime',
+    category: 'gmt-travel',
+    brand: 'PATEK PHILIPPE',
+    name: 'World Time Ref. 5230',
+    shortName: 'World Time 5230',
+    collection: 'Complications · Cottier',
+    reference: '5230G-014',
+    yearIntroduced: '1937',
+    tagline: '24 global cities & day/night ring with hand-guilloché center.',
+    description:
+      'Inheriting Louis Cottier’s 1937 universal time display, simultaneously tracking all 24 time zones across a concentric city disc, 24-hour sun/moon ring, and hand-guilloché charcoal dial center.',
+    caseShape: 'round',
+    caseDiameterMm: 38.5,
+    caseThicknessMm: 10.2,
+    lugToLugMm: 46.2,
+    caliber: 'Caliber 240 HU Micro-Rotor',
+    frequency: '21,600 vph (3 Hz)',
+    powerReserve: '48 hours',
+    waterResistance: '30 m / 3 bar',
+    bezelType: 'smooth',
+    braceletType: 'president',
+    handStyle: 'worldtime-ring',
+    hasCyclops: false,
+    hasDateWindow: false,
+    hasCrownGuards: false,
+    hasWorldTimeRing: true,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'oystersteel',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'leather',
+    bezelPrimaryHex: '#D8DCE0',
+    image: gmtImg,
+  },
+  {
+    id: 'longines-zulu-time',
+    category: 'gmt-travel',
+    brand: 'LONGINES',
+    name: 'Spirit Zulu Time 39',
+    shortName: 'Spirit Zulu 39',
+    collection: 'Heritage Aviation GMT',
+    reference: 'L3.802.4.53.6',
+    yearIntroduced: '1925',
+    tagline: 'True flyer GMT honoring the 1925 dual-time Zulu flag icon.',
+    description:
+      'Equipped with a bidirectional 24-hour ceramic bezel, gilt Arabic numerals, five applied chronometer stars, and an independent jumping local hour hand calibrated to COSC standards.',
+    caseShape: 'round',
+    caseDiameterMm: 39,
+    caseThicknessMm: 13.5,
+    lugToLugMm: 46.8,
+    caliber: 'Calibre L844.4 Silicon',
+    frequency: '25,200 vph (3.5 Hz)',
+    powerReserve: '72 hours',
+    waterResistance: '100 m / 10 bar',
+    bezelType: 'gmt-cerachrom',
+    braceletType: 'oyster',
+    handStyle: 'pilot-sword',
+    hasCyclops: false,
+    hasDateWindow: true,
+    hasCrownGuards: false,
+    hasChronoPushers: false,
+    hasGmtHand: true,
+    gmtHandColorHex: 0xd9a74a,
+    defaultAlloy: 'oystersteel',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'bracelet',
+    bezelPrimaryHex: '#152E24',
+    image: gmtImg,
+  },
+  {
+    id: 'hamilton-murph',
+    category: 'gmt-travel',
+    brand: 'HAMILTON',
+    name: 'Khaki Field Murph 38',
+    shortName: 'Khaki Murph',
+    collection: 'Khaki Field Mechanical',
+    reference: 'H70405730',
+    yearIntroduced: '2019',
+    tagline: 'Cathedral hands & vintage radium field dial from cinema lore.',
+    description:
+      'Celebrated for its matte black instrument dial, vintage Super-LumiNova cathedral hands, crisp railroad minute track, and 80-hour Nivachron H-10 automatic movement.',
+    caseShape: 'round',
+    caseDiameterMm: 38,
+    caseThicknessMm: 11.1,
+    lugToLugMm: 44.7,
+    caliber: 'Caliber H-10 (80h)',
+    frequency: '21,600 vph (3 Hz)',
+    powerReserve: '80 hours',
+    waterResistance: '100 m / 10 bar',
+    bezelType: 'smooth',
+    braceletType: 'oyster',
+    handStyle: 'cathedral',
+    hasCyclops: false,
+    hasDateWindow: false,
+    hasCrownGuards: false,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'oystersteel',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'leather',
+    bezelPrimaryHex: '#CFD4D9',
+    image: gmtImg,
+  },
+  {
+    id: 'nomos-tangente',
+    category: 'dress-classic',
+    brand: 'NOMOS GLASHÜTTE',
+    name: 'Tangente Neomatik 39',
+    shortName: 'Tangente 39',
+    collection: 'Bauhaus Glashütte',
+    reference: 'Ref. 140',
+    yearIntroduced: '1992',
+    tagline: 'Pure Bauhaus typography & tempered cornflower-blue hands.',
+    description:
+      'Defined by angular downturned lugs, a razor-thin bezel framing a galvanized white silver-plated dial, alternating slender Arabic numerals, recessed 6 o’clock sub-seconds, and ultra-thin DUW 3001.',
+    caseShape: 'round',
+    caseDiameterMm: 38.5,
+    caseThicknessMm: 6.9,
+    lugToLugMm: 47.6,
+    caliber: 'Caliber DUW 3001 Neomatik',
+    frequency: '21,600 vph (3 Hz)',
+    powerReserve: '43 hours',
+    waterResistance: '30 m / 3 bar',
+    bezelType: 'smooth',
+    braceletType: 'president',
+    handStyle: 'syringe',
+    hasCyclops: false,
+    hasDateWindow: false,
+    hasCrownGuards: false,
+    hasSmallSeconds: 6,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'oystersteel',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'leather',
+    bezelPrimaryHex: '#DFE3E8',
+    image: datejustImg,
+  },
+  // --- PACK 3: CULT DIVE & ASYMMETRIC TOOL ICONS ---
+  {
+    id: 'blancpain-fifty-fathoms',
+    category: 'dive-sport',
+    brand: 'BLANCPAIN',
+    name: 'Fifty Fathoms Automatique',
+    shortName: 'Fifty Fathoms',
+    collection: '1953 Modern Diver Origin',
+    reference: '5015-1130-52A',
+    yearIntroduced: '1953',
+    tagline: 'The 1953 archetypal diver with domed luminous sapphire bezel.',
+    description:
+      'Born for French combat divers in 1953, featuring a domed scratch-proof sapphire dive bezel over luminous markers, sunburst black dial, 4:30 date aperture, and triple-barrel 120-hour Calibre 1315.',
+    caseShape: 'round',
+    caseDiameterMm: 45,
+    caseThicknessMm: 15.4,
+    lugToLugMm: 50.6,
+    caliber: 'Calibre 1315 (3 Barrels)',
+    frequency: '28,800 vph (4 Hz)',
+    powerReserve: '120 hours',
+    waterResistance: '300 m / 30 bar',
+    bezelType: 'dive-cerachrom',
+    braceletType: 'oyster',
+    handStyle: 'pilot-sword',
+    hasCyclops: false,
+    hasDateWindow: true,
+    hasCrownGuards: false,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'oystersteel',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'oysterflex',
+    bezelPrimaryHex: '#0F1216',
+    image: submarinerImg,
+  },
+  {
+    id: 'doxa-sub300',
+    category: 'dive-sport',
+    brand: 'DOXA',
+    name: 'SUB 300 "Professional"',
+    shortName: 'DOXA SUB 300',
+    collection: 'Orange Saturation Icon',
+    reference: '821.10.351.10',
+    yearIntroduced: '1967',
+    tagline: 'High-visibility orange dial & dual no-decompression bezel.',
+    description:
+      'Tested by Jacques Cousteau’s teams in 1967: a hooded cushion steel case, vibrant orange high-contrast dial engineered for murky depths, and dual-scale US Navy no-deco steel bezel.',
+    caseShape: 'cushion',
+    caseDiameterMm: 42.5,
+    caseThicknessMm: 13.4,
+    lugToLugMm: 45.0,
+    caliber: 'COSC Chronometer Automatic',
+    frequency: '28,800 vph (4 Hz)',
+    powerReserve: '38 hours',
+    waterResistance: '300 m / 30 bar',
+    bezelType: 'dive-cerachrom',
+    braceletType: 'jubilee',
+    handStyle: 'classic',
+    hasCyclops: false,
+    hasDateWindow: true,
+    hasCrownGuards: false,
+    highDomeSapphire: true,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'oystersteel',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'bracelet',
+    bezelPrimaryHex: '#C9CFD5',
+    image: submarinerImg,
+  },
+  {
+    id: 'cartier-tank-louis',
+    category: 'shaped-icons',
+    brand: 'CARTIER',
+    name: 'Tank Louis Cartier',
+    shortName: 'Tank Louis',
+    collection: '1917 Paris Rectangular Icon',
+    reference: 'WGTA0011',
+    yearIntroduced: '1917',
+    tagline: 'Stepped gold brancards, chemin-de-fer track & blued swords.',
+    description:
+      'Designed by Louis Cartier in 1917 with seamlessly integrated parallel brancards, silvered grained dial, radial Roman numerals, sapphire cabochon crown, and heat-blued sword hands.',
+    caseShape: 'rectangular',
+    caseDiameterMm: 33.7,
+    caseThicknessMm: 6.6,
+    lugToLugMm: 33.7,
+    caliber: 'Caliber 1917 MC Manual',
+    frequency: '21,600 vph (3 Hz)',
+    powerReserve: '38 hours',
+    waterResistance: '30 m / 3 bar',
+    bezelType: 'reverso',
+    braceletType: 'santos',
+    handStyle: 'classic',
+    hasCyclops: false,
+    hasDateWindow: false,
+    hasCrownGuards: false,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'yellow-gold',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'leather',
+    bezelPrimaryHex: '#DEC274',
+    image: datejustImg,
+  },
+  {
+    id: 'cartier-crash',
+    category: 'shaped-icons',
+    brand: 'CARTIER',
+    name: 'Cartier Crash',
+    shortName: 'Cartier Crash',
+    collection: '1967 London Surrealist',
+    reference: 'CRWGCH0001',
+    yearIntroduced: '1967',
+    tagline: 'Sculpted asymmetric melted gold case & warped Romans.',
+    description:
+      'Born in Swinging Sixties London, defying symmetry with an organically melted 18k yellow gold silhouette, custom-contoured Roman numerals, and heat-blued steel sword hands.',
+    caseShape: 'crash',
+    caseDiameterMm: 38.5,
+    caseThicknessMm: 8.8,
+    lugToLugMm: 42.0,
+    caliber: 'Caliber 1917 MC Shaped Manual',
+    frequency: '21,600 vph (3 Hz)',
+    powerReserve: '38 hours',
+    waterResistance: '30 m / 3 bar',
+    bezelType: 'reverso',
+    braceletType: 'santos',
+    handStyle: 'classic',
+    hasCyclops: false,
+    hasDateWindow: false,
+    hasCrownGuards: false,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'yellow-gold',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'leather',
+    bezelPrimaryHex: '#DEC274',
+    image: datejustImg,
+  },
+  // --- PACK 4: PRECISION HIGH-BEAT & AVANT-GARDE ENGINEERING ---
+  {
+    id: 'gs-white-birch',
+    category: 'dress-classic',
+    brand: 'GRAND SEIKO',
+    name: 'Evolution 9 "White Birch"',
+    shortName: 'White Birch 9SA5',
+    collection: 'Hi-Beat 36000 · Shizukuishi',
+    reference: 'SLGH005',
+    yearIntroduced: '2021',
+    tagline: '36,000 vph Dual-Impulse 5 Hz caliber & sculpted birch dial.',
+    description:
+      'Inspired by the birch forests of Iwate Prefecture: a richly embossed vertical silver-white birch dial driven by the revolutionary 5 Hz Hi-Beat Caliber 9SA5 with 80-hour dual-barrel reserve.',
+    caseShape: 'round',
+    caseDiameterMm: 40,
+    caseThicknessMm: 11.7,
+    lugToLugMm: 47.0,
+    caliber: 'Caliber 9SA5 Hi-Beat 36000',
+    frequency: '36,000 vph (5 Hz)',
+    powerReserve: '80 hours',
+    waterResistance: '100 m / 10 bar',
+    bezelType: 'smooth',
+    braceletType: 'oyster',
+    handStyle: 'dauphine',
+    hasCyclops: false,
+    hasDateWindow: true,
+    hasCrownGuards: true,
+    highBeatHz: 5,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'oystersteel',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'bracelet',
+    bezelPrimaryHex: '#DCE0E5',
+    image: datejustImg,
+  },
+  {
+    id: 'gp-laureato',
+    category: 'shaped-icons',
+    brand: 'GIRARD-PERREGAUX',
+    name: 'Laureato 42',
+    shortName: 'Laureato 42',
+    collection: '1975 Clous de Paris Sport',
+    reference: '81010-11-431-11A',
+    yearIntroduced: '1975',
+    tagline: 'Octagonal bezel atop circular plinth & Clous de Paris dial.',
+    description:
+      'A 1975 Italian-designed architectural sport icon pairing a polished octagonal bezel with a deep blue Clous de Paris hobnail dial and fluidly integrated H-link steel bracelet.',
+    caseShape: 'octagonal',
+    caseDiameterMm: 42,
+    caseThicknessMm: 10.7,
+    lugToLugMm: 49.0,
+    caliber: 'Calibre GP01800-0008',
+    frequency: '28,800 vph (4 Hz)',
+    powerReserve: '54 hours',
+    waterResistance: '100 m / 10 bar',
+    bezelType: 'royal-oak',
+    braceletType: 'royal-oak',
+    handStyle: 'classic',
+    hasCyclops: false,
+    hasDateWindow: true,
+    hasCrownGuards: true,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'oystersteel',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'bracelet',
+    bezelPrimaryHex: '#CFD5DC',
+    image: datejustImg,
+  },
+  {
+    id: 'piaget-polo-79',
+    category: 'dress-classic',
+    brand: 'PIAGET',
+    name: 'Piaget Polo 79',
+    shortName: 'Polo 79',
+    collection: '1979 Sculptural Gold',
+    reference: 'G0A49150',
+    yearIntroduced: '1979',
+    tagline: 'Full 18k yellow gold with continuous horizontal gadroon ribs.',
+    description:
+      'A quintessential 1979 jet-set design icon where brushed gold links alternate with mirror-polished horizontal gadroon bars seamlessly across the bracelet, case, and dial.',
+    caseShape: 'round',
+    caseDiameterMm: 38,
+    caseThicknessMm: 7.45,
+    lugToLugMm: 44.0,
+    caliber: 'Calibre 1200P1 Micro-Rotor',
+    frequency: '21,600 vph (3 Hz)',
+    powerReserve: '44 hours',
+    waterResistance: '30 m / 3 bar',
+    bezelType: 'smooth',
+    braceletType: 'nautilus',
+    handStyle: 'classic',
+    hasCyclops: false,
+    hasDateWindow: false,
+    hasCrownGuards: false,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'yellow-gold',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'bracelet',
+    bezelPrimaryHex: '#E0C370',
+    image: datejustImg,
+  },
+  {
+    id: 'lange-zeitwerk',
+    category: 'independent',
+    brand: 'A. LANGE & SÖHNE',
+    name: 'Zeitwerk',
+    shortName: 'Zeitwerk',
+    collection: 'Mechanical Digital Jumping',
+    reference: '142.029',
+    yearIntroduced: '2009',
+    tagline: 'Constant-force mechanical jumping numerals & German silver bridge.',
+    description:
+      'A watershed of modern haute horlogerie: a sculpted rhodiumed German silver time bridge frames instantaneous jumping mechanical hour and minute discs alongside a 6 o’clock small seconds.',
+    caseShape: 'round',
+    caseDiameterMm: 41.9,
+    caseThicknessMm: 12.2,
+    lugToLugMm: 50.0,
+    caliber: 'Calibre L043.6 Constant-Force',
+    frequency: '18,000 vph (2.5 Hz)',
+    powerReserve: '72 hours',
+    waterResistance: '30 m / 3 bar',
+    bezelType: 'smooth',
+    braceletType: 'president',
+    handStyle: 'classic',
+    hasCyclops: false,
+    hasDateWindow: false,
+    hasCrownGuards: false,
+    hasSmallSeconds: 6,
+    hasPowerReserveHand: true,
+    isJumpingDigital: true,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'oystersteel',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'leather',
+    bezelPrimaryHex: '#D8DCE0',
+    image: datejustImg,
+  },
+  // --- CASIO ICONS ---
+  {
+    id: 'casio-gshock-dw5600',
+    category: 'dive-sport',
+    brand: 'CASIO',
+    name: 'G-Shock Origin DW-5600',
+    shortName: 'G-Shock DW-5600',
+    collection: '1983 Triple-10 Shock Icon',
+    reference: 'DW-5600E-1V',
+    yearIntroduced: '1983',
+    tagline: 'Kikuo Ibe’s indestructible hollow-core square digital legend.',
+    description:
+      'Born from Kikuo Ibe’s Triple-10 vision (10m drop, 10-year battery, 10-bar minimum): a shock-absorbing matte resin square case, iconic red/blue perimeter frame, and high-contrast 7-segment LCD.',
+    caseShape: 'square',
+    caseDiameterMm: 42.8,
+    caseThicknessMm: 13.4,
+    lugToLugMm: 48.9,
+    caliber: 'Module 3229 Digital Quartz',
+    frequency: '32,768 Hz (Digital Quartz)',
+    powerReserve: '2-Year CR2016 Cell',
+    waterResistance: '200 m / 20 bar',
+    bezelType: 'santos',
+    braceletType: 'oyster',
+    handStyle: 'classic',
+    hasCyclops: false,
+    hasDateWindow: false,
+    hasCrownGuards: false,
+    isDigitalDisplay: true,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'oystersteel',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'oysterflex',
+    bezelPrimaryHex: '#1D2024',
+    image: submarinerImg,
+  },
+  {
+    id: 'casio-casioak-ga2100',
+    category: 'shaped-icons',
+    brand: 'CASIO',
+    name: 'G-Shock "CasiOak" GA-2100',
+    shortName: 'CasiOak GA-2100',
+    collection: 'Carbon Core Guard Octagon',
+    reference: 'GA-2100-1A1',
+    yearIntroduced: '2019',
+    tagline: 'Stealth Carbon Core Guard octagonal ana-digi phenomenon.',
+    description:
+      'Nicknamed the "CasiOak" for its crisp octagonal bezel silhouette, fusing ultra-slim 11.8mm Carbon Core Guard resin architecture with luminous analog hands, a 9 o’clock day fan, and 4:30 LCD.',
+    caseShape: 'octagonal',
+    caseDiameterMm: 45.4,
+    caseThicknessMm: 11.8,
+    lugToLugMm: 48.5,
+    caliber: 'Module 5611 Ana-Digi Quartz',
+    frequency: '32,768 Hz (Ana-Digi Quartz)',
+    powerReserve: '3-Year Dual SR726W',
+    waterResistance: '200 m / 20 bar',
+    bezelType: 'royal-oak',
+    braceletType: 'royal-oak',
+    handStyle: 'pilot-sword',
+    hasCyclops: false,
+    hasDateWindow: false,
+    hasCrownGuards: false,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'oystersteel',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'oysterflex',
+    bezelPrimaryHex: '#1E2226',
+    image: submarinerImg,
+  },
+  {
+    id: 'casio-f91w',
+    category: 'shaped-icons',
+    brand: 'CASIO',
+    name: 'Casio F-91W Vintage',
+    shortName: 'Casio F-91W',
+    collection: '1989 Retro Digital Classic',
+    reference: 'F-91W-1XY',
+    yearIntroduced: '1989',
+    tagline: '21-gram utilitarian icon with blue/gold striped LCD frame.',
+    description:
+      'Perhaps the most recognizable digital wristwatch ever made: an ultra-slim 8.5mm angular resin case, crisp blue and gold perimeter graphic, micro-LED backlight, and 7-year quartz reliability.',
+    caseShape: 'compact-octagon',
+    caseDiameterMm: 35.2,
+    caseThicknessMm: 8.5,
+    lugToLugMm: 38.2,
+    caliber: 'Module 593 Digital Quartz',
+    frequency: '32,768 Hz (Digital Quartz)',
+    powerReserve: '7-Year CR2016 Cell',
+    waterResistance: '30 m / 3 bar (WR)',
+    bezelType: 'reverso',
+    braceletType: 'oyster',
+    handStyle: 'classic',
+    hasCyclops: false,
+    hasDateWindow: false,
+    hasCrownGuards: false,
+    isDigitalDisplay: true,
+    hasChronoPushers: false,
+    hasGmtHand: false,
+    defaultAlloy: 'oystersteel',
+    defaultDial: 'default',
+    defaultBezel: 'obsidian',
+    defaultBelt: 'oysterflex',
+    bezelPrimaryHex: '#1A1D21',
+    image: submarinerImg,
+  },
 ];
 
 export const WATCH_HOTSPOTS: WatchHotspot[] = [
@@ -1146,8 +1922,9 @@ export const WATCH_HOTSPOTS: WatchHotspot[] = [
   {
     id: 'crown',
     label: 'Crown',
-    title: 'Winding Crown & Pushers',
-    detail: 'Pull crown to wind time across midnight, or click piston/screw pushers to run the chronograph.',
+    title: '3-Position Winding Crown & Pushers',
+    detail:
+      'Click crown for Pos 1 (Wind), Pos 2 (Quick-Set Date/Moon), and Pos 3 (Hack Seconds & Set Time), or press pushers.',
     camPos: [5.2, 4.0, 2.2],
     camTarget: [1.75, 3.55, 0.2],
   },
@@ -1523,6 +2300,36 @@ export const CURATED_SHOWDOWNS: CuratedShowdown[] = [
     primaryId: 'breguet-classique',
     compareId: 'lange-1',
   },
+  {
+    id: 'diver-origins',
+    label: 'Fifty Fathoms vs Sub',
+    primaryId: 'blancpain-fifty-fathoms',
+    compareId: 'submariner',
+  },
+  {
+    id: 'octagon-clash',
+    label: 'Royal Oak vs CasiOak',
+    primaryId: 'ap-royal-oak',
+    compareId: 'casio-casioak-ga2100',
+  },
+  {
+    id: 'japanese-duel',
+    label: 'White Birch vs Snowflake',
+    primaryId: 'gs-white-birch',
+    compareId: 'gs-snowflake',
+  },
+  {
+    id: 'indep-haute',
+    label: 'LM101 vs Zeitwerk',
+    primaryId: 'mbf-lm101',
+    compareId: 'lange-zeitwerk',
+  },
+  {
+    id: 'rectangular-legends',
+    label: 'Tank Louis vs Reverso',
+    primaryId: 'cartier-tank-louis',
+    compareId: 'jlc-reverso',
+  },
 ];
 
 export function resolveBeltShade(watch: WatchSpec, shadeId: BeltShadeId): BeltShadeOption {
@@ -1536,7 +2343,10 @@ export function resolveBeltShade(watch: WatchSpec, shadeId: BeltShadeId): BeltSh
     watch.id === 'vc-overseas' ||
     watch.id === 'jlc-reverso' ||
     watch.id === 'breguet-classique' ||
-    watch.id === 'omega-seamaster'
+    watch.id === 'omega-seamaster' ||
+    watch.id === 'fpj-chronometre-bleu' ||
+    watch.id === 'pp-worldtime' ||
+    watch.id === 'gp-laureato'
   ) {
     return BELT_SHADE_OPTIONS.find((s) => s.id === 'midnight') ?? BELT_SHADE_OPTIONS[0];
   }
@@ -1544,14 +2354,25 @@ export function resolveBeltShade(watch: WatchSpec, shadeId: BeltShadeId): BeltSh
     watch.id === 'tudor-bb58' ||
     watch.id === 'iwc-big-pilot' ||
     watch.id === 'avi8-spitfire' ||
-    watch.id === 'panerai-luminor'
+    watch.id === 'panerai-luminor' ||
+    watch.id === 'mbf-lm101' ||
+    watch.id === 'cartier-tank-louis'
   ) {
     return BELT_SHADE_OPTIONS.find((s) => s.id === 'cognac') ?? BELT_SHADE_OPTIONS[0];
   }
-  if (watch.id === 'breitling-navitimer' || watch.id === 'rm-tonneau' || watch.id === 'omega-speedmaster') {
+  if (
+    watch.id === 'breitling-navitimer' ||
+    watch.id === 'rm-tonneau' ||
+    watch.id === 'omega-speedmaster' ||
+    watch.id === 'hamilton-murph' ||
+    watch.id === 'nomos-tangente' ||
+    watch.id === 'blancpain-fifty-fathoms' ||
+    watch.id === 'lange-zeitwerk' ||
+    watch.brand === 'CASIO'
+  ) {
     return BELT_SHADE_OPTIONS.find((s) => s.id === 'obsidian') ?? BELT_SHADE_OPTIONS[0];
   }
-  if (watch.defaultDial === 'emerald') {
+  if (watch.defaultDial === 'emerald' || watch.id === 'moser-streamliner' || watch.id === 'longines-zulu-time') {
     return BELT_SHADE_OPTIONS.find((s) => s.id === 'british-green') ?? BELT_SHADE_OPTIONS[0];
   }
   return BELT_SHADE_OPTIONS[0];
@@ -1573,12 +2394,14 @@ export function getBeltLabelForWatch(watch: WatchSpec, beltId: BeltId): string {
   }
   if (watch.brand === 'ROLEX') return 'Oysterflex';
   if (watch.brand === 'RICHARD MILLE') return 'Vented Elastomer';
+  if (watch.brand === 'CASIO') return 'Shock-Absorbing Resin';
   return 'Vulcanized Rubber';
 }
 
 export function getShortBeltTabLabel(watch: WatchSpec, beltId: BeltId): string {
   if (beltId === 'bracelet') return 'Bracelet';
   if (beltId === 'leather') return 'Leather';
+  if (watch.brand === 'CASIO') return 'Resin';
   return watch.brand === 'ROLEX' ? 'Oysterflex' : 'Rubber';
 }
 
@@ -1593,12 +2416,44 @@ export function resolveAlloy(watch: WatchSpec, alloyId: AlloyId): AlloyOption {
       bezelMetalColor: 0xa6784b,
     };
   }
+  if (watch.id === 'fpj-chronometre-bleu' && alloyId === 'default') {
+    return {
+      id: 'default',
+      label: 'Blue-Grey Tantalum',
+      swatchHex: '#6E7A8A',
+      primaryColor: 0x6c798a,
+      centerColor: 0x7a8899,
+      bezelMetalColor: 0x738192,
+    };
+  }
+  if (watch.id === 'bulgari-octo-finissimo' && alloyId === 'default') {
+    return {
+      id: 'default',
+      label: 'Sandblasted Titanium',
+      swatchHex: '#9AA0A6',
+      primaryColor: 0x9aa0a6,
+      centerColor: 0xa4aab0,
+      bezelMetalColor: 0x9ea4aa,
+    };
+  }
+  if (watch.brand === 'CASIO' && alloyId === 'default') {
+    return {
+      id: 'default',
+      label: watch.id === 'casio-casioak-ga2100' ? 'Carbon Core Resin' : 'Matte Stealth Resin',
+      swatchHex: '#202429',
+      primaryColor: 0x22262b,
+      centerColor: 0x1b1f24,
+      bezelMetalColor: 0x272b30,
+    };
+  }
   const effective = alloyId === 'default' ? watch.defaultAlloy : alloyId;
   const base = ALLOY_OPTIONS.find((a) => a.id === effective) ?? ALLOY_OPTIONS[1];
   if (watch.brand !== 'ROLEX') {
     if (base.id === 'oystersteel') {
       const titaniumBrand =
-        watch.brand === 'GRAND SEIKO' || watch.brand === 'RICHARD MILLE';
+        watch.brand === 'GRAND SEIKO' ||
+        watch.brand === 'RICHARD MILLE' ||
+        watch.brand === 'BULGARI';
       return {
         ...base,
         label: titaniumBrand ? 'Grade 5 Titanium' : '316L Stainless Steel',
@@ -1745,6 +2600,204 @@ export function resolveDial(watch: WatchSpec, dialId: DialId): DialOption {
       edgeHex: '#CEC6B8',
       sunburst: false,
       lightText: false,
+    };
+  }
+  if (watch.id === 'fpj-chronometre-bleu' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Chrome Blue Mirror',
+      swatchHex: '#0F4EA8',
+      baseHex: '#1562C9',
+      edgeHex: '#071F4A',
+      sunburst: true,
+      lightText: true,
+    };
+  }
+  if (watch.id === 'moser-streamliner' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Matrix Green Fumé',
+      swatchHex: '#1E6B47',
+      baseHex: '#2B8E5D',
+      edgeHex: '#06140D',
+      sunburst: true,
+      lightText: true,
+    };
+  }
+  if (watch.id === 'mbf-lm101' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Frosted Anthracite Plate',
+      swatchHex: '#333840',
+      baseHex: '#3E444E',
+      edgeHex: '#1B1E24',
+      sunburst: false,
+      lightText: true,
+    };
+  }
+  if (watch.id === 'bulgari-octo-finissimo' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Sandblasted Titanium',
+      swatchHex: '#8E959C',
+      baseHex: '#9BA2A9',
+      edgeHex: '#6F767D',
+      sunburst: false,
+      lightText: false,
+    };
+  }
+  if (watch.id === 'pp-worldtime' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Charcoal Hand-Guilloché',
+      swatchHex: '#2D343D',
+      baseHex: '#39414C',
+      edgeHex: '#1A1E24',
+      sunburst: false,
+      lightText: true,
+    };
+  }
+  if (watch.id === 'longines-zulu-time' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Anthracite Gilt Aviation',
+      swatchHex: '#1F2225',
+      baseHex: '#25292D',
+      edgeHex: '#0D0F11',
+      sunburst: false,
+      lightText: true,
+    };
+  }
+  if (watch.id === 'hamilton-murph' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Matte Black Field',
+      swatchHex: '#141618',
+      baseHex: '#191B1E',
+      edgeHex: '#090A0B',
+      sunburst: false,
+      lightText: true,
+    };
+  }
+  if (watch.id === 'nomos-tangente' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Galvanized White Silver',
+      swatchHex: '#F3F1EC',
+      baseHex: '#FAF9F6',
+      edgeHex: '#E0DDD5',
+      sunburst: false,
+      lightText: false,
+    };
+  }
+  if (watch.id === 'blancpain-fifty-fathoms' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Sunburst Abyssal Black',
+      swatchHex: '#101318',
+      baseHex: '#1A1F26',
+      edgeHex: '#06080A',
+      sunburst: true,
+      lightText: true,
+    };
+  }
+  if (watch.id === 'doxa-sub300' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Professional Orange',
+      swatchHex: '#EE621B',
+      baseHex: '#F46A20',
+      edgeHex: '#C8480C',
+      sunburst: false,
+      lightText: false,
+    };
+  }
+  if ((watch.id === 'cartier-tank-louis' || watch.id === 'cartier-crash') && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Silvered Grained Opaline',
+      swatchHex: '#EFECE3',
+      baseHex: '#F5F2EA',
+      edgeHex: '#DCD6C7',
+      sunburst: false,
+      lightText: false,
+    };
+  }
+  if (watch.id === 'gs-white-birch' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Shizukuishi White Birch',
+      swatchHex: '#E6E9ED',
+      baseHex: '#F1F3F6',
+      edgeHex: '#CDD3DB',
+      sunburst: false,
+      lightText: false,
+    };
+  }
+  if (watch.id === 'gp-laureato' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Clous de Paris Cobalt',
+      swatchHex: '#163A6B',
+      baseHex: '#1D4B8A',
+      edgeHex: '#0A1C38',
+      sunburst: false,
+      lightText: true,
+    };
+  }
+  if (watch.id === 'piaget-polo-79' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: '18k Gold Gadroon Ribbed',
+      swatchHex: '#D8B75D',
+      baseHex: '#E5C773',
+      edgeHex: '#B6913B',
+      sunburst: false,
+      lightText: false,
+    };
+  }
+  if (watch.id === 'lange-zeitwerk' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Obsidian & German Silver',
+      swatchHex: '#181A1D',
+      baseHex: '#202327',
+      edgeHex: '#0B0C0E',
+      sunburst: false,
+      lightText: true,
+    };
+  }
+  if (watch.id === 'casio-gshock-dw5600' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Origin Red-Line LCD',
+      swatchHex: '#1B1E22',
+      baseHex: '#1E2227',
+      edgeHex: '#0E1013',
+      sunburst: false,
+      lightText: true,
+    };
+  }
+  if (watch.id === 'casio-casioak-ga2100' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Stealth Carbon Matte',
+      swatchHex: '#1C1F23',
+      baseHex: '#22262B',
+      edgeHex: '#0F1114',
+      sunburst: false,
+      lightText: true,
+    };
+  }
+  if (watch.id === 'casio-f91w' && dialId === 'default') {
+    return {
+      id: 'default',
+      label: 'Retro Blue/Gold LCD',
+      swatchHex: '#1A1E24',
+      baseHex: '#1D2229',
+      edgeHex: '#0D1014',
+      sunburst: false,
+      lightText: true,
     };
   }
   const effective = dialId === 'default' ? watch.defaultDial : dialId;
@@ -1923,6 +2976,439 @@ export function getAtelierTourSteps(watch: WatchSpec): AtelierTourStep[] {
   ];
 }
 
+export function resolveCaliberBeatProfile(watch: WatchSpec): CaliberBeatProfile {
+  if (watch.isSpringDrive) {
+    return {
+      beatHz: 0,
+      vph: 0,
+      isSpringDrive: true,
+      isQuartz: false,
+      liftAngleDeg: 52,
+      label: 'Spring Drive Glide',
+    };
+  }
+  const freq = watch.frequency.toLowerCase();
+  if (freq.includes('32,768') || freq.includes('1/5s') || freq.includes('quartz')) {
+    const label = watch.isDigitalDisplay
+      ? '32,768 Hz · Digital Quartz'
+      : watch.brand === 'CASIO'
+        ? '32,768 Hz · Ana-Digi Quartz'
+        : 'Meca-Quartz (1 Hz + 1/5s)';
+    return {
+      beatHz: 0.5,
+      vph: 3600,
+      isSpringDrive: false,
+      isQuartz: true,
+      liftAngleDeg: 0,
+      label,
+    };
+  }
+  if (watch.highBeatHz === 5 || freq.includes('36,000') || freq.includes('5 hz')) {
+    return {
+      beatHz: 5,
+      vph: 36000,
+      isSpringDrive: false,
+      isQuartz: false,
+      liftAngleDeg: 50,
+      label: '36,000 vph (5 Hz High-Beat)',
+    };
+  }
+  if (watch.highBeatHz === 3.5 || freq.includes('25,200') || freq.includes('3.5 hz')) {
+    return {
+      beatHz: 3.5,
+      vph: 25200,
+      isSpringDrive: false,
+      isQuartz: false,
+      liftAngleDeg: 52,
+      label: watch.brand === 'OMEGA' ? '25,200 vph (3.5 Hz Co-Axial)' : '25,200 vph (3.5 Hz Silicon)',
+    };
+  }
+  if (freq.includes('18,000') || freq.includes('2.5 hz')) {
+    return {
+      beatHz: 2.5,
+      vph: 18000,
+      isSpringDrive: false,
+      isQuartz: false,
+      liftAngleDeg: 50,
+      label: '18,000 vph (2.5 Hz Traditional)',
+    };
+  }
+  if (watch.highBeatHz === 3 || freq.includes('21,600') || freq.includes('(3 hz)')) {
+    return {
+      beatHz: 3,
+      vph: 21600,
+      isSpringDrive: false,
+      isQuartz: false,
+      liftAngleDeg: watch.brand === 'A. LANGE & SÖHNE' ? 50 : 52,
+      label: '21,600 vph (3 Hz)',
+    };
+  }
+  const hz = watch.highBeatHz ?? 4;
+  return {
+    beatHz: hz,
+    vph: Math.round(hz * 7200),
+    isSpringDrive: false,
+    isQuartz: false,
+    liftAngleDeg: watch.brand === 'ROLEX' ? 53 : 52,
+    label: `${Math.round(hz * 7200).toLocaleString()} vph (${hz} Hz)`,
+  };
+}
+
+export function getWatchYearNumeric(watch: WatchSpec): number {
+  const parsed = parseInt(watch.yearIntroduced, 10);
+  return Number.isFinite(parsed) ? parsed : 2000;
+}
+
+export function getChronologicalWatches(): WatchSpec[] {
+  return WATCH_MODELS.map((watch, idx) => ({ watch, idx }))
+    .sort((a, b) => {
+      const diff = getWatchYearNumeric(a.watch) - getWatchYearNumeric(b.watch);
+      return diff !== 0 ? diff : a.idx - b.idx;
+    })
+    .map((entry) => entry.watch);
+}
+
 export function getWatchById(id: WatchModelId): WatchSpec {
   return WATCH_MODELS.find((w) => w.id === id) ?? WATCH_MODELS[0];
 }
+
+export type LugStyle =
+  | 'oyster'
+  | 'integrated-shoulder'
+  | 'cushion-hood'
+  | 'panerai-cushion'
+  | 'santos-integrated'
+  | 'straight-dress'
+  | 'wire-breguet'
+  | 'brancard'
+  | 'reverso-cradle'
+  | 'crash-asymmetric'
+  | 'casio-shroud';
+
+export type CrownMode =
+  | 'none'
+  | 'screw-down-3pos'
+  | 'screw-down-2pos'
+  | 'push-pull-3pos'
+  | 'push-pull-2pos'
+  | 'meca-quartz';
+
+export type BezelDirection = 'none' | 'unidirectional' | 'bidirectional';
+
+export interface CrownStopOption {
+  pos: CrownPosition;
+  label: string;
+  shortLabel: string;
+}
+
+export interface WatchCapabilities {
+  lugStyle: LugStyle;
+  crownMode: CrownMode;
+  isScrewDownCrown: boolean;
+  crownStops: CrownStopOption[];
+  supportsManualWind: boolean;
+  supportsQuickSetDate: boolean;
+  supportsHacking: boolean;
+  bezelDirection: BezelDirection;
+  hasInteractiveBezel: boolean;
+  allowedAlloys: AlloyId[];
+  allowedDials: DialId[];
+  allowedBezels: BezelId[];
+  allowedBelts: BeltId[];
+  supportsLume: boolean;
+  supportsExhibitionBack: boolean;
+  supportsTimegrapher: boolean;
+  supportsXray: boolean;
+  hasMicroAdjustClasp: (beltId: BeltId) => boolean;
+}
+
+const ALL_ALLOYS: AlloyId[] = ['default', 'oystersteel', 'yellow-gold', 'everose', 'rolesor'];
+const ALL_DIALS: DialId[] = [
+  'default',
+  'obsidian',
+  'panda',
+  'emerald',
+  'royal-blue',
+  'champagne',
+  'ice-blue',
+  'meteorite',
+  'aventurine',
+  'mother-of-pearl',
+  'snowflake',
+];
+const ALL_BEZELS: BezelId[] = ['default', 'obsidian', 'emerald', 'pepsi', 'batman', 'sprite'];
+
+export function resolveWatchCapabilities(watch: WatchSpec): WatchCapabilities {
+  const beatProfile = resolveCaliberBeatProfile(watch);
+  const id = watch.id;
+
+  // 1. Faithful Lug Architecture per Reference
+  let lugStyle: LugStyle = 'oyster';
+  if (id === 'cartier-tank-louis') {
+    lugStyle = 'brancard';
+  } else if (id === 'jlc-reverso') {
+    lugStyle = 'reverso-cradle';
+  } else if (id === 'cartier-crash') {
+    lugStyle = 'crash-asymmetric';
+  } else if (watch.brand === 'CASIO') {
+    lugStyle = 'casio-shroud';
+  } else if (
+    id === 'ap-royal-oak' ||
+    id === 'pp-nautilus' ||
+    id === 'bulgari-octo-finissimo' ||
+    id === 'gp-laureato' ||
+    id === 'vc-overseas' ||
+    id === 'piaget-polo-79'
+  ) {
+    lugStyle = 'integrated-shoulder';
+  } else if (id === 'doxa-sub300' || id === 'moser-streamliner' || id === 'rm-tonneau') {
+    lugStyle = 'cushion-hood';
+  } else if (id === 'panerai-luminor') {
+    lugStyle = 'panerai-cushion';
+  } else if (id === 'cartier-santos' || id === 'tag-monaco') {
+    lugStyle = 'santos-integrated';
+  } else if (id === 'breguet-classique') {
+    lugStyle = 'wire-breguet';
+  } else if (
+    id === 'nomos-tangente' ||
+    id === 'fpj-chronometre-bleu' ||
+    id === 'mbf-lm101' ||
+    id === 'lange-1' ||
+    id === 'lange-zeitwerk' ||
+    id === 'pp-worldtime'
+  ) {
+    lugStyle = 'straight-dress';
+  }
+
+  // 2. Authentic Crown System per Reference
+  const isCasio = watch.brand === 'CASIO';
+  const hasDateMechanism = Boolean(watch.hasDateWindow || watch.hasDayWindow || watch.hasMoonphase);
+  const isScrewDown =
+    !isCasio &&
+    (watch.brand === 'ROLEX' ||
+      id === 'omega-seamaster' ||
+      id === 'tudor-bb58' ||
+      id === 'vc-overseas' ||
+      id === 'panerai-luminor' ||
+      id === 'rm-tonneau' ||
+      id === 'longines-zulu-time' ||
+      id === 'blancpain-fifty-fathoms' ||
+      id === 'doxa-sub300' ||
+      id === 'moser-streamliner' ||
+      id === 'iwc-big-pilot');
+
+  let crownMode: CrownMode;
+  if (isCasio) {
+    crownMode = 'none';
+  } else if (id === 'avi8-spitfire') {
+    crownMode = 'meca-quartz';
+  } else if (isScrewDown) {
+    crownMode = hasDateMechanism ? 'screw-down-3pos' : 'screw-down-2pos';
+  } else {
+    crownMode = hasDateMechanism ? 'push-pull-3pos' : 'push-pull-2pos';
+  }
+
+  const supportsManualWind = !isCasio && !beatProfile.isQuartz;
+  const supportsQuickSetDate = !isCasio && hasDateMechanism;
+  const supportsHacking =
+    !isCasio &&
+    !beatProfile.isQuartz &&
+    !beatProfile.isSpringDrive &&
+    id !== 'pp-worldtime' &&
+    id !== 'fpj-chronometre-bleu';
+
+  const crownStops: CrownStopOption[] = [];
+  if (crownMode === 'screw-down-3pos') {
+    crownStops.push(
+      { pos: 1, label: 'Pos 1 · Wind', shortLabel: 'Wind' },
+      { pos: 2, label: watch.hasMoonphase ? 'Pos 2 · Date & Moon' : 'Pos 2 · Date', shortLabel: 'Date' },
+      { pos: 3, label: supportsHacking ? 'Pos 3 · Hack & Set' : 'Pos 3 · Time Set', shortLabel: 'Set' }
+    );
+  } else if (crownMode === 'screw-down-2pos') {
+    crownStops.push(
+      { pos: 1, label: 'Pos 1 · Wind', shortLabel: 'Wind' },
+      { pos: 3, label: supportsHacking ? 'Pos 2 · Hack & Set' : 'Pos 2 · Time Set', shortLabel: 'Set' }
+    );
+  } else if (crownMode === 'push-pull-3pos') {
+    crownStops.push(
+      { pos: 1, label: 'Pos 0 · Manual Wind', shortLabel: 'Wind' },
+      { pos: 2, label: watch.hasMoonphase ? 'Pos 1 · Date & Moon' : 'Pos 1 · Date', shortLabel: 'Date' },
+      { pos: 3, label: supportsHacking ? 'Pos 2 · Hack & Set' : 'Pos 2 · Time Set', shortLabel: 'Set' }
+    );
+  } else if (crownMode === 'push-pull-2pos') {
+    crownStops.push(
+      { pos: 1, label: 'Pos 0 · Manual Wind', shortLabel: 'Wind' },
+      { pos: 3, label: supportsHacking ? 'Pos 1 · Hack & Set' : 'Pos 1 · Time Set', shortLabel: 'Set' }
+    );
+  } else if (crownMode === 'meca-quartz') {
+    crownStops.push(
+      { pos: 2, label: 'Pos 1 · Quick Date', shortLabel: 'Date' },
+      { pos: 3, label: 'Pos 2 · Time Set', shortLabel: 'Set' }
+    );
+  }
+
+  // 3. Authentic Bezel Rotation Mechanics (Unidirectional ISO Divers vs Bidirectional GMT/Slide-Rule/Yacht)
+  let bezelDirection: BezelDirection = 'none';
+  if (
+    watch.bezelType === 'dive-cerachrom' ||
+    watch.bezelType === 'seamaster'
+  ) {
+    bezelDirection = 'unidirectional';
+  } else if (
+    watch.bezelType === 'gmt-cerachrom' ||
+    watch.bezelType === 'navitimer' ||
+    watch.bezelType === 'yacht-cerachrom'
+  ) {
+    bezelDirection = 'bidirectional';
+  }
+
+  // 4. Faithful Allowed Belts, Alloys, Dials & Bezels per Watch
+  let allowedBelts: BeltId[];
+  if (isCasio || id === 'rm-tonneau') {
+    allowedBelts = ['oysterflex'];
+  } else if (
+    id === 'bulgari-octo-finissimo' ||
+    id === 'moser-streamliner' ||
+    id === 'piaget-polo-79'
+  ) {
+    allowedBelts = ['bracelet'];
+  } else if (
+    id === 'ap-royal-oak' ||
+    id === 'pp-nautilus' ||
+    id === 'gp-laureato' ||
+    id === 'vc-overseas'
+  ) {
+    allowedBelts = ['bracelet', 'oysterflex'];
+  } else if (
+    id === 'cartier-tank-louis' ||
+    id === 'cartier-crash' ||
+    id === 'jlc-reverso' ||
+    id === 'lange-1' ||
+    id === 'lange-zeitwerk' ||
+    id === 'fpj-chronometre-bleu' ||
+    id === 'mbf-lm101' ||
+    id === 'pp-worldtime' ||
+    id === 'breguet-classique' ||
+    id === 'nomos-tangente'
+  ) {
+    allowedBelts = ['leather'];
+  } else if (
+    id === 'omega-speedmaster' ||
+    id === 'cartier-santos' ||
+    id === 'gs-snowflake' ||
+    id === 'gs-white-birch' ||
+    id === 'hamilton-murph' ||
+    id === 'zenith-el-primero' ||
+    id === 'breitling-navitimer' ||
+    id === 'iwc-big-pilot' ||
+    id === 'tag-monaco' ||
+    id === 'avi8-spitfire' ||
+    id === 'longines-zulu-time'
+  ) {
+    allowedBelts = ['bracelet', 'leather'];
+  } else {
+    allowedBelts = ['bracelet', 'leather', 'oysterflex'];
+  }
+
+  let allowedAlloys: AlloyId[];
+  if (isCasio) {
+    allowedAlloys = ['default'];
+  } else if (id === 'fpj-chronometre-bleu') {
+    allowedAlloys = ['default'];
+  } else if (id === 'bulgari-octo-finissimo' || id === 'rm-tonneau') {
+    allowedAlloys = ['default', 'everose'];
+  } else if (
+    id === 'piaget-polo-79' ||
+    id === 'cartier-crash' ||
+    id === 'cartier-tank-louis' ||
+    id === 'daydate' ||
+    id === 'lange-1' ||
+    id === 'lange-zeitwerk' ||
+    id === 'pp-worldtime' ||
+    id === 'breguet-classique' ||
+    id === 'mbf-lm101'
+  ) {
+    allowedAlloys = ['default', 'yellow-gold', 'everose'];
+  } else {
+    allowedAlloys = ALL_ALLOYS;
+  }
+
+  let allowedDials: DialId[];
+  if (watch.isDigitalDisplay) {
+    allowedDials = ['default'];
+  } else if (
+    id === 'cartier-crash' ||
+    id === 'lange-zeitwerk' ||
+    id === 'mbf-lm101' ||
+    id === 'pp-worldtime' ||
+    id === 'casio-casioak-ga2100'
+  ) {
+    allowedDials = ['default'];
+  } else if (
+    id === 'cartier-tank-louis' ||
+    id === 'jlc-reverso' ||
+    id === 'breguet-classique' ||
+    id === 'nomos-tangente' ||
+    id === 'fpj-chronometre-bleu'
+  ) {
+    allowedDials = ['default', 'obsidian', 'royal-blue', 'champagne'];
+  } else {
+    allowedDials = ALL_DIALS;
+  }
+
+  let allowedBezels: BezelId[];
+  if (id === 'gmt') {
+    allowedBezels = ALL_BEZELS;
+  } else if (id === 'submariner' || id === 'yachtmaster') {
+    allowedBezels = ['default', 'obsidian', 'emerald'];
+  } else {
+    allowedBezels = ['default'];
+  }
+
+  // 5. True Lume, Exhibition Caseback, Timegrapher & Clasp Micro-Adjust Capabilities
+  const noLumeIds: WatchModelId[] = [
+    'cartier-tank-louis',
+    'cartier-crash',
+    'jlc-reverso',
+    'breguet-classique',
+    'fpj-chronometre-bleu',
+    'mbf-lm101',
+    'bulgari-octo-finissimo',
+    'pp-worldtime',
+    'nomos-tangente',
+    'piaget-polo-79',
+    'gs-snowflake',
+    'gs-white-birch',
+    'lange-1',
+    'lange-zeitwerk',
+    'casio-f91w',
+    'casio-gshock-dw5600',
+  ];
+  const supportsLume = !noLumeIds.includes(id);
+  const supportsExhibitionBack = !isCasio && !watch.hasReversoFlip;
+  const supportsTimegrapher = !beatProfile.isQuartz;
+  const supportsXray = true;
+
+  return {
+    lugStyle,
+    crownMode,
+    isScrewDownCrown: isScrewDown,
+    crownStops,
+    supportsManualWind,
+    supportsQuickSetDate,
+    supportsHacking,
+    bezelDirection,
+    hasInteractiveBezel: bezelDirection !== 'none',
+    allowedAlloys,
+    allowedDials,
+    allowedBezels,
+    allowedBelts,
+    supportsLume,
+    supportsExhibitionBack,
+    supportsTimegrapher,
+    supportsXray,
+    hasMicroAdjustClasp: (beltId: BeltId) =>
+      beltId === 'bracelet' || (beltId === 'oysterflex' && !isCasio),
+  };
+}
+

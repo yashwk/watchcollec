@@ -78,7 +78,13 @@ export default function RolexShowcaseClient() {
           setLightingMode(qLight);
         }
         const qCompare = params.get('compare') as WatchModelId | null;
-        if (qCompare && WATCH_MODELS.some((w) => w.id === qCompare) && qCompare !== qWatch) {
+        const resolvedPrimary: WatchModelId =
+          qWatch && WATCH_MODELS.some((w) => w.id === qWatch) ? qWatch : 'submariner';
+        if (
+          qCompare &&
+          WATCH_MODELS.some((w) => w.id === qCompare) &&
+          qCompare !== resolvedPrimary
+        ) {
           setCompareModelId(qCompare);
         }
       } catch {

@@ -27,6 +27,7 @@ import {
   WatchCategoryId,
   WatchModelId,
   WatchSpec,
+  getWatchYearNumeric,
 } from '@/lib/watches';
 import WatchMiniDial from './WatchMiniDial';
 
@@ -40,7 +41,7 @@ interface NavBezelWheelProps {
   isLightBackdrop: boolean;
 }
 
-type FilterMode = 'all' | 'pillar' | 'maison';
+type FilterMode = 'all' | 'pillar' | 'maison' | 'timeline';
 
 const ARC_TICKS = Array.from({ length: 48 }, (_, i) => i * 7.5);
 
@@ -181,7 +182,7 @@ export default function NavBezelWheel({
 
   const items = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return WATCH_MODELS.filter((w) => {
+    const filtered = WATCH_MODELS.filter((w) => {
       if (filterMode === 'pillar' && w.category !== pillarFilter) return false;
       if (filterMode === 'maison' && w.brand !== maisonFilter) return false;
       if (!q) return true;
@@ -191,9 +192,16 @@ export default function NavBezelWheel({
         w.brand.toLowerCase().includes(q) ||
         w.reference.toLowerCase().includes(q) ||
         w.caliber.toLowerCase().includes(q) ||
-        w.collection.toLowerCase().includes(q)
+        w.collection.toLowerCase().includes(q) ||
+        w.yearIntroduced.toLowerCase().includes(q)
       );
     });
+    if (filterMode === 'timeline') {
+      return [...filtered].sort(
+        (a, b) => getWatchYearNumeric(a) - getWatchYearNumeric(b)
+      );
+    }
+    return filtered;
   }, [query, filterMode, pillarFilter, maisonFilter]);
 
   const total = items.length;
@@ -486,14 +494,16 @@ export default function NavBezelWheel({
                   : 'border-white/12 bg-white/[0.04]'
               }`}
             >
-              {(['all', 'pillar', 'maison'] as FilterMode[]).map((mode) => {
+              {(['all', 'pillar', 'maison', 'timeline'] as FilterMode[]).map((mode) => {
                 const active = filterMode === mode;
                 const label =
                   mode === 'all'
                     ? `All (${WATCH_MODELS.length})`
                     : mode === 'pillar'
-                      ? 'By Pillar'
-                      : 'By Maison';
+                      ? 'Pillar'
+                      : mode === 'maison'
+                        ? 'Maison'
+                        : '1795+ Era';
                 return (
                   <button
                     key={mode}
@@ -502,7 +512,7 @@ export default function NavBezelWheel({
                       setFilterMode(mode);
                       horologyAudio.playEscapementTick(false);
                     }}
-                    className={`cursor-pointer relative flex-1 rounded py-1 text-[11px] font-medium tracking-wider uppercase transition-colors ${
+                    className={`cursor-pointer relative flex-1 rounded py-1 text-[10.5px] font-medium tracking-wider uppercase transition-colors ${
                       active
                         ? 'text-white'
                         : isLightBackdrop
@@ -524,7 +534,7 @@ export default function NavBezelWheel({
             </div>
 
             {/* Sub-filter strip for Pillar or Maison */}
-            {filterMode !== 'all' && (
+            {(filterMode === 'pillar' || filterMode === 'maison') && (
               <div className="mt-2 flex items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-0.5">
                 {filterMode === 'pillar'
                   ? WATCH_CATEGORIES.map((cat) => {
@@ -644,20 +654,28 @@ export default function NavBezelWheel({
               </div>
             ) : (
               <div className="relative h-full w-full">
-                {items.map((w, idx) => (
-                  <WheelTooth
-                    key={w.id}
-                    watch={w}
-                    index={idx}
-                    total={total}
-                    smoothScrollMV={smoothScrollMV}
-                    isActive3D={w.id === selectedModel}
-                    isCompared={w.id === compareModelId}
-                    isFocused={idx === safeFocusedIdx}
-                    isLightBackdrop={isLightBackdrop}
-                    onPick={handlePickTooth}
-                  />
-                ))}
+                {items.map((w, idx) => {
+                  if (
+                    total > 13 &&
+                    Math.abs(getShortestDelta(idx, safeFocusedIdx, total)) > 6
+                  ) {
+                    return null;
+                  }
+                  return (
+                    <WheelTooth
+                      key={w.id}
+                      watch={w}
+                      index={idx}
+                      total={total}
+                      smoothScrollMV={smoothScrollMV}
+                      isActive3D={w.id === selectedModel}
+                      isCompared={w.id === compareModelId}
+                      isFocused={idx === safeFocusedIdx}
+                      isLightBackdrop={isLightBackdrop}
+                      onPick={handlePickTooth}
+                    />
+                  );
+                })}
               </div>
             )}
 
