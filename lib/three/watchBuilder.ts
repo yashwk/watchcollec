@@ -745,7 +745,7 @@ function createOysterLugGeometry(
   }
 ): THREE.BufferGeometry {
   const segs = 24;
-  const yRoot = lugAttachR * 0.48;
+  const yRoot = lugAttachR * 0.62;
   const yTip = lugAttachR * (opts?.tipExtend ?? 1.215);
   const xInnerBase = lugSpanWidth * 0.5 - 0.014;
 
@@ -777,8 +777,8 @@ function createOysterLugGeometry(
     const cx = (xIn + xOut) * 0.5;
     const hw = Math.max(0.032, Math.abs(xOut - xIn) * 0.5);
 
-    const zTop = halfT * 0.82 - easeT * (halfT * 0.72 + 0.035) * zDropScale;
-    const zBot = -halfT * 0.9 - easeT * Math.min(0.15, halfT * 0.42) * zDropScale;
+    const zTop = halfT * 0.73 - easeT * (halfT * 0.64 + 0.032) * zDropScale;
+    const zBot = -halfT * 0.88 - easeT * Math.min(0.15, halfT * 0.4) * zDropScale;
     const cz = (zTop + zBot) * 0.5;
     const hh = Math.max(0.045, (zTop - zBot) * 0.5) * noseFactor;
 
@@ -815,7 +815,7 @@ function createOysterLugGeometry(
 
   // Watertight Root End Cap (i = 0) so no hollow interior is ever visible from any angle
   const cxRoot = side * ((xInnerBase + xOuterRoot) * 0.5);
-  const czRoot = (halfT * 0.82 - halfT * 0.9) * 0.5;
+  const czRoot = (halfT * 0.73 - halfT * 0.88) * 0.5;
   const rootCenterIdx = positions.length / 3;
   positions.push(cxRoot, yRoot, czRoot);
   uvs.push(0.5, 0);
@@ -826,8 +826,8 @@ function createOysterLugGeometry(
   // Watertight Bullnose Tip Cap (i = segs)
   const tipStart = segs * ringCount;
   const cxTip = side * ((xInnerBase + xOuterTip) * 0.5);
-  const zTopTip = halfT * 0.82 - (halfT * 0.72 + 0.035) * zDropScale;
-  const zBotTip = -halfT * 0.9 - Math.min(0.15, halfT * 0.42) * zDropScale;
+  const zTopTip = halfT * 0.73 - (halfT * 0.64 + 0.032) * zDropScale;
+  const zBotTip = -halfT * 0.88 - Math.min(0.15, halfT * 0.4) * zDropScale;
   const czTip = (zTopTip + zBotTip) * 0.5;
   const tipCenterIdx = positions.length / 3;
   positions.push(cxTip, yTip + 0.008, czTip);
@@ -857,22 +857,24 @@ function createIntegratedHoodGeometry(
   halfT: number,
   tipZCenter: number,
   tipHalfDepth: number,
-  chamferPow = 0.36
+  chamferPow = 0.36,
+  rootCurveDrop = 0.24
 ): THREE.BufferGeometry {
   const segs = 18;
   const ringCount = 17;
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
+  const rootHalfW = Math.max(0.25, rootWidth * 0.5);
 
   for (let i = 0; i <= segs; i++) {
     const t = i / segs;
     const easeT = t * t * (0.4 + 0.6 * t);
-    const y = THREE.MathUtils.lerp(yRoot, yTip, t);
     const hw = THREE.MathUtils.lerp(rootWidth * 0.5, tipWidth * 0.5, Math.pow(t, 0.85));
 
-    const zTop = THREE.MathUtils.lerp(halfT * 0.8, tipZCenter + tipHalfDepth, easeT);
-    const zBot = THREE.MathUtils.lerp(-halfT * 0.92, tipZCenter - tipHalfDepth, easeT);
+    // Keep top strictly below baseLayerZ.bezel (halfT * 0.76) and bottom flush with middle case
+    const zTop = THREE.MathUtils.lerp(halfT * 0.7, tipZCenter + tipHalfDepth, easeT);
+    const zBot = THREE.MathUtils.lerp(-halfT * 0.88, tipZCenter - tipHalfDepth, easeT);
     const cz = (zTop + zBot) * 0.5;
     const hh = Math.max(0.035, (zTop - zBot) * 0.5);
 
@@ -882,7 +884,11 @@ function createIntegratedHoodGeometry(
       const sa = Math.sin(a);
       const px = Math.sign(ca) * Math.pow(Math.abs(ca), chamferPow) * hw;
       const pz = cz + Math.sign(sa) * Math.pow(Math.abs(sa), chamferPow + 0.08) * hh;
-      positions.push(px, y, pz);
+      // Curve the embedded inner root along the watch case wall so it NEVER enters the dial or exhibition opening
+      const xFrac = Math.min(1, Math.abs(px) / rootHalfW);
+      const yLocalRoot = yRoot - xFrac * xFrac * rootCurveDrop;
+      const py = THREE.MathUtils.lerp(yLocalRoot, yTip, t);
+      positions.push(px, py, pz);
       uvs.push(j / (ringCount - 1), t);
     }
   }
@@ -897,9 +903,9 @@ function createIntegratedHoodGeometry(
     }
   }
 
-  // Watertight root cap
+  // Watertight root cap strictly inside solid case rim
   const rootIdx = positions.length / 3;
-  positions.push(0, yRoot, (halfT * 0.8 - halfT * 0.92) * 0.5);
+  positions.push(0, yRoot, (halfT * 0.7 - halfT * 0.88) * 0.5);
   uvs.push(0.5, 0);
   for (let j = 0; j < ringCount - 1; j++) {
     indices.push(j + 1, j, rootIdx);
@@ -919,6 +925,140 @@ function createIntegratedHoodGeometry(
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   geo.setIndex(indices);
   geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * Builds a true 4-armed faceted swallowtail V-notched Maltese Cross (Vacheron Constantin hallmark).
+ */
+function createMalteseCrossGeometry(
+  outerR: number,
+  depth: number,
+  bevel = 0.005
+): THREE.BufferGeometry {
+  const shape = new THREE.Shape();
+  const waistR = outerR * 0.22;
+  const notchR = outerR * 0.64;
+  const wingSpread = 0.42;
+
+  for (let k = 0; k < 4; k++) {
+    const baseA = (k * Math.PI) / 2;
+    const cA = baseA - Math.PI / 4;
+    const lA = baseA - wingSpread;
+    const rA = baseA + wingSpread;
+
+    const cx = Math.cos(cA) * waistR;
+    const cy = Math.sin(cA) * waistR;
+    if (k === 0) shape.moveTo(cx, cy);
+    else shape.lineTo(cx, cy);
+
+    shape.lineTo(Math.cos(lA) * outerR, Math.sin(lA) * outerR);
+    shape.lineTo(Math.cos(baseA) * notchR, Math.sin(baseA) * notchR);
+    shape.lineTo(Math.cos(rA) * outerR, Math.sin(rA) * outerR);
+  }
+  shape.closePath();
+
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: bevel > 0,
+    bevelThickness: bevel,
+    bevelSize: bevel * 0.78,
+    bevelSegments: 2,
+  });
+  geo.translate(0, 0, -depth * 0.5);
+  return geo;
+}
+
+/**
+ * Builds Vacheron Constantin Overseas 4520V's continuous mirror-polished 6-notched Maltese Cross bezel ring.
+ * 6 raised curved lobes sit at 12, 2, 4, 6, 8, 10 o'clock with 6 sculpted concave notches at 1, 3, 5, 7, 9, 11.
+ */
+function createOverseasBezelRingGeometry(
+  innerR: number,
+  outerR: number,
+  depth = 0.068
+): THREE.BufferGeometry {
+  const shape = new THREE.Shape();
+  const segs = 180;
+  const rHigh = outerR * 0.992;
+  const rLow = innerR + (outerR - innerR) * 0.46;
+
+  for (let i = 0; i <= segs; i++) {
+    const a = (i / segs) * Math.PI * 2;
+    // Broad sculpted plateaus at 12, 2, 4, 6, 8, 10 o'clock separated by crisp Maltese-cross flutes
+    const wave = Math.cos(6 * (a - Math.PI / 2));
+    const lobe = Math.tanh(2.45 * wave) * 0.5 + 0.5;
+    const r = THREE.MathUtils.lerp(rLow, rHigh, lobe);
+    const x = Math.cos(a) * r;
+    const y = Math.sin(a) * r;
+    if (i === 0) shape.moveTo(x, y);
+    else shape.lineTo(x, y);
+  }
+  shape.closePath();
+
+  const hole = new THREE.Path();
+  hole.absarc(0, 0, innerR + 0.008, 0, Math.PI * 2, true);
+  shape.holes.push(hole);
+
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: true,
+    bevelThickness: 0.015,
+    bevelSize: 0.012,
+    bevelSegments: 3,
+    curveSegments: 24,
+  });
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * Builds Vacheron Constantin Overseas interlocking half-Maltese-Cross bracelet links.
+ */
+function createOverseasHalfMalteseLinkGeometry(
+  width: number,
+  length: number,
+  thickness: number,
+  isCenter: boolean
+): THREE.BufferGeometry {
+  const hw = width * 0.5;
+  const hl = length * 0.5;
+  const shape = new THREE.Shape();
+
+  if (isCenter) {
+    // Mirror-polished hourglass / half-Maltese-Cross center link with sculpted flared shoulders
+    const waist = hw * 0.64;
+    shape.moveTo(-hw * 0.92, -hl);
+    shape.quadraticCurveTo(0, -hl * 0.82, hw * 0.92, -hl);
+    shape.quadraticCurveTo(waist, 0, hw * 0.92, hl);
+    shape.quadraticCurveTo(0, hl * 0.82, -hw * 0.92, hl);
+    shape.quadraticCurveTo(-waist, 0, -hw * 0.92, -hl);
+    shape.closePath();
+  } else {
+    // Satin-brushed curved half-Maltese outer shoulder link with gentle scalloped bevel
+    const r = Math.min(hw, hl) * 0.24;
+    shape.moveTo(-hw + r, -hl);
+    shape.quadraticCurveTo(0, -hl * 1.06, hw - r, -hl);
+    shape.quadraticCurveTo(hw, -hl, hw, -hl + r);
+    shape.quadraticCurveTo(hw * 0.9, 0, hw, hl - r);
+    shape.quadraticCurveTo(hw, hl, hw - r, hl);
+    shape.quadraticCurveTo(0, hl * 1.06, -hw + r, hl);
+    shape.quadraticCurveTo(-hw, hl, -hw, hl - r);
+    shape.quadraticCurveTo(-hw * 0.9, 0, -hw, -hl + r);
+    shape.quadraticCurveTo(-hw, -hl, -hw + r, -hl);
+    shape.closePath();
+  }
+
+  const bevel = Math.min(thickness * 0.24, 0.022);
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: Math.max(0.02, thickness - bevel * 2),
+    bevelEnabled: true,
+    bevelThickness: bevel,
+    bevelSize: bevel * 0.85,
+    bevelSegments: 3,
+    curveSegments: 16,
+  });
+  geo.center();
   return geo;
 }
 
@@ -1338,8 +1478,11 @@ export function buildWatchAssembly(
   const lugSpanWidth =
     watch.id === 'avi8-spitfire' || watch.id === 'omega-speedmaster' || watch.id === 'rm-tonneau'
       ? 2.12
-      : watch.id === 'ap-royal-oak' || watch.id === 'pp-nautilus' || watch.id === 'gp-laureato'
-        ? 2.24
+      : watch.id === 'ap-royal-oak' ||
+          watch.id === 'pp-nautilus' ||
+          watch.id === 'gp-laureato' ||
+          watch.id === 'vc-overseas'
+        ? 2.22
         : watch.id === 'casio-casioak-ga2100'
           ? 2.22
           : watch.id === 'casio-gshock-dw5600'
@@ -1595,13 +1738,27 @@ export function buildWatchAssembly(
       lugParent.add(lugMesh);
     });
   } else if (lugStyle === 'casio-shroud') {
-    // Casio G-Shock / CasiOak / F-91W: Solid watertight wedge-sculpted resin hood embedded deeply in case
-    const rootW = Math.min(caseR * 1.62, lugSpanWidth * 1.28);
-    const tipW = lugSpanWidth * 1.12;
-    const yRoot = lugAttachR * 0.62;
+    // Casio G-Shock / CasiOak / F-91W: Solid watertight wedge-sculpted resin hood seated cleanly outside the dial cavity
+    const dialTopY = hasRoundDialOnShapedCase
+      ? dialR
+      : getCaseShapeRadius(Math.PI / 2, dialR, caseShape);
+    const rootW = Math.min(caseR * 1.62, lugSpanWidth * 1.24);
+    const tipW = lugSpanWidth * 1.1;
+    const yRoot = dialTopY + (lugAttachR - dialTopY) * 0.45;
     const yTip = lugAttachR * (watch.id === 'casio-f91w' ? 1.14 : 1.16);
+    const rootDrop = Math.min(0.28, (lugAttachR - dialTopY) * 0.54);
     const hoodGeo = trackGeo(
-      createIntegratedHoodGeometry(rootW, tipW, yRoot, yTip, halfT, -halfT * 0.22, strapThickness * 0.58, 0.28)
+      createIntegratedHoodGeometry(
+        rootW,
+        tipW,
+        yRoot,
+        yTip,
+        halfT,
+        -halfT * 0.22,
+        strapThickness * 0.58,
+        0.28,
+        rootDrop
+      )
     );
     [1, -1].forEach((signY) => {
       const hood = new THREE.Mesh(hoodGeo, mats.brushedMetal);
@@ -1614,12 +1771,15 @@ export function buildWatchAssembly(
     // Integrated bracelet icons (Royal Oak, Nautilus, Octo Finissimo, Laureato, Overseas, Polo 79)
     // and Hooded Cushion / Tonneau icons (DOXA SUB 300, Moser Streamliner, Richard Mille)
     const isHooded = lugStyle === 'cushion-hood';
-    const rootSampleY = lugAttachR * 0.58;
-    const sampleAng = Math.atan2(rootSampleY, caseR * 0.72);
-    const contourW = Math.cos(sampleAng) * getCaseShapeRadius(sampleAng, caseR, caseShape) * 1.94;
-    const rootW = Math.max(lugSpanWidth * 1.14, Math.min(contourW, caseR * 1.72));
-    const tipW = isHooded ? lugSpanWidth * 1.06 : lugSpanWidth * 1.1;
-    const yRoot = lugAttachR * 0.54;
+    const dialTopY = hasRoundDialOnShapedCase
+      ? dialR
+      : getCaseShapeRadius(Math.PI / 2, dialR, caseShape);
+    const yRoot = dialTopY + (lugAttachR - dialTopY) * 0.44;
+    const rootDrop = Math.min(0.3, (lugAttachR - dialTopY) * 0.56);
+    const sampleAng = Math.atan2(yRoot - rootDrop, caseR * 0.72);
+    const contourW = Math.cos(sampleAng) * getCaseShapeRadius(sampleAng, caseR, caseShape) * 1.92;
+    const rootW = Math.max(lugSpanWidth * 1.12, Math.min(contourW, caseR * 1.68));
+    const tipW = isHooded ? lugSpanWidth * 1.06 : lugSpanWidth * 1.08;
     const yTip = lugAttachR * (isHooded ? 1.12 : 1.13);
     const hoodGeo = trackGeo(
       createIntegratedHoodGeometry(
@@ -1630,7 +1790,8 @@ export function buildWatchAssembly(
         halfT,
         -halfT * 0.26,
         Math.max(linkThickness * 0.52, halfT * 0.42),
-        isHooded ? 0.44 : 0.28
+        isHooded ? 0.44 : 0.28,
+        rootDrop
       )
     );
     [1, -1].forEach((signY) => {
@@ -1803,6 +1964,8 @@ export function buildWatchAssembly(
     watch.id === 'datejust' ||
     watch.id === 'daydate' ||
     watch.id === 'milgauss' ||
+    watch.id === 'skydweller' ||
+    watch.id === 'gs-snowflake' ||
     watch.id === 'avi8-spitfire' ||
     watch.id === 'pp-nautilus' ||
     watch.id === 'ap-royal-oak' ||
@@ -1810,34 +1973,74 @@ export function buildWatchAssembly(
     watch.id === 'jlc-reverso' ||
     watch.id === 'lange-1';
 
+  // A. Lange & Söhne Lange 1 iconic 10 o'clock rectangular 18k gold Outsize Date quick-set pusher
+  if (watch.id === 'lange-1') {
+    const lAng = (5 * Math.PI) / 6;
+    const lpGroup = new THREE.Group();
+    lpGroup.position.set(Math.cos(lAng) * (caseR + 0.03), Math.sin(lAng) * (caseR + 0.03), 0);
+    lpGroup.rotation.z = lAng - Math.PI / 2;
+    const lpButton = new THREE.Mesh(
+      trackGeo(createRoundedLinkGeometry(0.28, 0.14, halfT * 0.72, 0.02)),
+      mats.polishedMetal
+    );
+    lpButton.position.y = 0.05;
+    lpButton.castShadow = true;
+    lpGroup.add(lpButton);
+    caseGroup.add(lpGroup);
+  }
+
+  // Blancpain Fifty Fathoms signature raised 9 o'clock chamfered flank signature plaque
+  if (watch.id === 'blancpain-fifty-fathoms') {
+    const flankPlaque = new THREE.Mesh(
+      trackGeo(createRoundedLinkGeometry(0.06, caseR * 0.62, halfT * 0.68, 0.014)),
+      mats.polishedMetal
+    );
+    flankPlaque.position.set(-caseR * 0.995, 0, 0);
+    caseGroup.add(flankPlaque);
+  }
+
   if (watch.hasCrownBridge) {
+    const panFlankR = getCaseShapeRadius(0, caseR, caseShape);
     const bridgeShape = new THREE.Shape();
     bridgeShape.absarc(0, 0, 0.56, -Math.PI * 0.48, Math.PI * 0.48, false);
     bridgeShape.absarc(0, 0, 0.34, Math.PI * 0.48, -Math.PI * 0.48, true);
     bridgeShape.closePath();
     const bridgeGeo = trackGeo(
       new THREE.ExtrudeGeometry(bridgeShape, {
-        depth: 0.36,
+        depth: halfT * 1.12,
         bevelEnabled: true,
-        bevelThickness: 0.032,
-        bevelSize: 0.026,
+        bevelThickness: 0.03,
+        bevelSize: 0.024,
         bevelSegments: 4,
         curveSegments: 24,
       })
     );
-    bridgeGeo.translate(0, 0, -0.18);
+    bridgeGeo.translate(0, 0, -halfT * 0.56);
     const bridgeMesh = new THREE.Mesh(bridgeGeo, mats.brushedMetal);
-    bridgeMesh.position.set(caseR * 0.96, 0, -0.02);
+    bridgeMesh.position.set(panFlankR * 0.95, 0, -0.015 * zStackScale);
     bridgeMesh.castShadow = true;
 
     const leverArm = new THREE.Mesh(
-      trackGeo(createRoundedLinkGeometry(0.14, 0.54, 0.24, 0.035)),
+      trackGeo(createRoundedLinkGeometry(0.14, 0.56, halfT * 0.74, 0.032)),
       mats.polishedMetal
     );
-    leverArm.position.set(caseR + 0.44, -0.16, -0.02);
+    leverArm.position.set(panFlankR + 0.43, -0.16, -0.015 * zStackScale);
     leverArm.rotation.z = 0.14;
     leverArm.castShadow = true;
-    caseGroup.add(bridgeMesh, leverArm);
+
+    const leverPin = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.042, 0.042, halfT * 1.18, 16)),
+      mats.polishedMetal
+    );
+    leverPin.rotation.x = Math.PI / 2;
+    leverPin.position.set(panFlankR + 0.39, 0.14, -0.015 * zStackScale);
+
+    const leverTab = new THREE.Mesh(
+      trackGeo(createRoundedLinkGeometry(0.12, 0.14, halfT * 0.68, 0.022)),
+      mats.brushedMetal
+    );
+    leverTab.position.set(panFlankR + 0.48, -0.42, -0.015 * zStackScale);
+    caseGroup.add(bridgeMesh, leverArm, leverPin, leverTab);
   } else if (!omitStandardGuards) {
     const guardShape = new THREE.Shape();
     guardShape.moveTo(-0.24, -0.2);
@@ -1849,35 +2052,42 @@ export function buildWatchAssembly(
 
     const guardGeo = trackGeo(
       new THREE.ExtrudeGeometry(guardShape, {
-        depth: 0.32,
+        depth: Math.min(0.32, halfT * 1.08),
         bevelEnabled: true,
-        bevelThickness: 0.065,
-        bevelSize: 0.048,
+        bevelThickness: 0.055 * zStackScale,
+        bevelSize: 0.044,
         bevelSegments: 5,
         curveSegments: 24,
       })
     );
     guardGeo.center();
 
+    const guardFlankR = getCaseShapeRadius(0, caseR, caseShape);
     [-0.35, 0.35].forEach((yPos, idx) => {
       const guard = new THREE.Mesh(guardGeo, mats.polishedMetal);
-      guard.position.set(caseR * 0.96, yPos, -0.02);
+      guard.position.set(guardFlankR * 0.96, yPos, -0.015 * zStackScale);
       guard.rotation.z = idx === 0 ? 0.14 : -0.14;
       guard.castShadow = true;
       caseGroup.add(guard);
     });
   }
 
-  // CNC-Lathed Winding Crown (Supports Left-Hand 9h Crown, Conical Pilot Crown, Cartier Cabochon, Triplock)
+  // CNC-Lathed Winding Crown (Supports Left-Hand 9h Crown, Zeitwerk 2h Crown, AP Hexagonal, Bulgari Octagonal Ceramic,
+  // Cartier Heptagonal vs Beaded Pearl Cabochon, Conical Pilot Crown, RM Rubber Torque Crown, Triplock)
   // Casio digital/ana-digi models use 4 side push-buttons instead of a mechanical winding crown
   const crownGroup = new THREE.Group();
-  const crownFlankR = getCaseShapeRadius(watch.leftCrown ? Math.PI : 0, caseR, caseShape);
+  const crownAngle = watch.id === 'lange-zeitwerk' ? Math.PI / 6 : watch.leftCrown ? Math.PI : 0;
+  const crownFlankR = getCaseShapeRadius(crownAngle, caseR, caseShape);
   const crownBaseX =
     watch.id === 'pp-nautilus'
       ? crownFlankR + 0.25
       : crownFlankR + 0.14;
-  crownGroup.position.set(watch.leftCrown ? -crownBaseX : crownBaseX, 0, -0.015 * zStackScale);
-  crownGroup.rotation.z = watch.leftCrown ? Math.PI / 2 : -Math.PI / 2;
+  crownGroup.position.set(
+    Math.cos(crownAngle) * crownBaseX,
+    Math.sin(crownAngle) * crownBaseX,
+    -0.015 * zStackScale
+  );
+  crownGroup.rotation.z = crownAngle - Math.PI / 2;
   const crownScale = THREE.MathUtils.clamp(caseDepth / 1.05, 0.58, 1.05);
   crownGroup.scale.setScalar(crownScale);
 
@@ -1885,7 +2095,7 @@ export function buildWatchAssembly(
   if (watch.brand !== 'CASIO') {
     const crownTube = new THREE.Mesh(
       trackGeo(new THREE.CylinderGeometry(0.14, 0.14, 0.36, 32)),
-      mats.bezelMetal
+      watch.id === 'tudor-bb58' ? mats.goldAccent : mats.bezelMetal
     );
     crownTube.position.y = -0.04;
     crownGroup.add(crownTube);
@@ -1904,25 +2114,91 @@ export function buildWatchAssembly(
   if (watch.brand === 'CASIO') {
     // No mechanical winding crown on Casio resin digital/ana-digi cases
   } else if (watch.brand === 'CARTIER') {
-    // 7-sided faceted crown tipped with Cartier's iconic blue sapphire cabochon
-    const heptCrown = new THREE.Mesh(
-      trackGeo(new THREE.CylinderGeometry(0.21, 0.19, 0.22, 7)),
-      mats.polishedMetal
-    );
-    heptCrown.position.y = 0.08;
-    heptCrown.castShadow = true;
-    heptCrown.userData.interactive = 'crown';
-    interactiveMeshes.push(heptCrown);
+    if (watch.id === 'cartier-santos') {
+      // Santos de Cartier: 7-sided faceted heptagonal crown tipped with blue sapphire cabochon
+      const heptCrown = new THREE.Mesh(
+        trackGeo(new THREE.CylinderGeometry(0.21, 0.19, 0.22, 7)),
+        mats.polishedMetal
+      );
+      heptCrown.position.y = 0.08;
+      heptCrown.castShadow = true;
+      heptCrown.userData.interactive = 'crown';
+      interactiveMeshes.push(heptCrown);
+      windingCrown.add(heptCrown);
+    } else {
+      // Tank Louis Cartier & Cartier Crash: Classic circular beaded pearl-knurled gold crown
+      const pearlCore = new THREE.Mesh(
+        trackGeo(new THREE.CylinderGeometry(0.19, 0.18, 0.18, 28)),
+        mats.polishedMetal
+      );
+      pearlCore.position.y = 0.07;
+      pearlCore.castShadow = true;
+      pearlCore.userData.interactive = 'crown';
+      interactiveMeshes.push(pearlCore);
+      windingCrown.add(pearlCore);
+
+      const beadGeo = trackGeo(new THREE.SphereGeometry(0.036, 10, 8));
+      const beadCount = 16;
+      const beadInst = new THREE.InstancedMesh(beadGeo, mats.polishedMetal, beadCount);
+      const bDummy = new THREE.Object3D();
+      for (let i = 0; i < beadCount; i++) {
+        const a = (i / beadCount) * Math.PI * 2;
+        bDummy.position.set(Math.cos(a) * 0.195, 0.075, Math.sin(a) * 0.195);
+        bDummy.updateMatrix();
+        beadInst.setMatrixAt(i, bDummy.matrix);
+      }
+      beadInst.instanceMatrix.needsUpdate = true;
+      beadInst.computeBoundingSphere();
+      windingCrown.add(beadInst);
+    }
 
     const cabochon = new THREE.Mesh(
       trackGeo(new THREE.SphereGeometry(0.115, 24, 16)),
       mats.sapphireCabochon
     );
-    cabochon.position.y = 0.21;
+    cabochon.position.y = watch.id === 'cartier-santos' ? 0.21 : 0.185;
     cabochon.scale.set(1, 0.72, 1);
     cabochon.userData.interactive = 'crown';
     interactiveMeshes.push(cabochon);
-    windingCrown.add(heptCrown, cabochon);
+    windingCrown.add(cabochon);
+  } else if (watch.id === 'ap-royal-oak') {
+    // Audemars Piguet Royal Oak: Iconic 6-sided hexagonal chamfered crown
+    const hexBody = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.24, 0.24, 0.2, 6)),
+      mats.brushedMetal
+    );
+    hexBody.position.y = 0.085;
+    hexBody.castShadow = true;
+    hexBody.userData.interactive = 'crown';
+    interactiveMeshes.push(hexBody);
+
+    const hexCap = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.2, 0.24, 0.045, 6)),
+      mats.polishedMetal
+    );
+    hexCap.position.y = 0.205;
+    hexCap.userData.interactive = 'crown';
+    interactiveMeshes.push(hexCap);
+    windingCrown.add(hexBody, hexCap);
+  } else if (watch.id === 'bulgari-octo-finissimo') {
+    // Bulgari Octo Finissimo: Ultra-slim 8-sided octagonal crown inlaid with matte black ceramic disc
+    const octoBody = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.25, 0.25, 0.18, 8)),
+      mats.brushedMetal
+    );
+    octoBody.position.y = 0.075;
+    octoBody.castShadow = true;
+    octoBody.userData.interactive = 'crown';
+    interactiveMeshes.push(octoBody);
+
+    const ceramicInlay = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.155, 0.155, 0.035, 24)),
+      mats.oysterflexBelt
+    );
+    ceramicInlay.position.y = 0.175;
+    ceramicInlay.userData.interactive = 'crown';
+    interactiveMeshes.push(ceramicInlay);
+    windingCrown.add(octoBody, ceramicInlay);
   } else if (watch.id === 'avi8-spitfire' || watch.hasConicalCrown) {
     const isIwc = Boolean(watch.hasConicalCrown);
     // Fluted cylindrical (AVI-8) or oversized conical diamond onion crown (IWC Big Pilot)
@@ -2013,7 +2289,31 @@ export function buildWatchAssembly(
     crownRidges.computeBoundingSphere();
     windingCrown.add(crownRidges);
 
-    if (watch.brand === 'ROLEX') {
+    if (watch.id === 'rm-tonneau') {
+      // Richard Mille torque-limiting vulcanized black rubber grip tire + red racing ring
+      const rmTire = new THREE.Mesh(
+        trackGeo(new THREE.TorusGeometry(0.255, 0.048, 12, 28)),
+        mats.oysterflexBelt
+      );
+      rmTire.rotation.x = Math.PI / 2;
+      rmTire.position.y = 0.09;
+      const rmRedAccent = new THREE.Mesh(
+        trackGeo(new THREE.TorusGeometry(0.14, 0.016, 10, 24)),
+        mats.crimsonAccent
+      );
+      rmRedAccent.rotation.x = Math.PI / 2;
+      rmRedAccent.position.y = 0.25;
+      windingCrown.add(rmTire, rmRedAccent);
+    } else if (watch.id === 'vc-overseas') {
+      // Vacheron Constantin embossed Maltese Cross crown hallmark
+      const crownMaltese = new THREE.Mesh(
+        trackGeo(createMalteseCrossGeometry(0.088, 0.018, 0.004)),
+        mats.polishedMetal
+      );
+      crownMaltese.rotation.x = -Math.PI / 2;
+      crownMaltese.position.y = 0.262;
+      windingCrown.add(crownMaltese);
+    } else if (watch.brand === 'ROLEX') {
       // Embossed Rounded Coronet Spikes + Triplock 3-Dot Hallmark
       const coronetBase = new THREE.Mesh(
         trackGeo(createRoundedLinkGeometry(0.1, 0.025, 0.02, 0.006)),
@@ -2050,78 +2350,128 @@ export function buildWatchAssembly(
     caseGroup.add(crownGroup);
   }
 
-  // Chronograph Pushers (Classic Piston/Pump vs. Screw-Down Oyster)
+  // Chronograph Pushers (TAG Monaco Horizontal Rectangular Blades · RM Racing Pedals · Classic Pump · Screw-Down Oyster)
   const chronoPushers: THREE.Mesh[] = [];
   if (watch.hasChronoPushers) {
-    const isAvi8 =
-      watch.brand === 'AVI-8' ||
-      watch.brand === 'OMEGA' ||
-      watch.brand === 'ZENITH' ||
-      watch.brand === 'TAG HEUER' ||
-      watch.brand === 'BREITLING';
-    const pusherCollarSpline = isAvi8
-      ? new THREE.SplineCurve([
-          new THREE.Vector2(0.0, -0.18),
-          new THREE.Vector2(0.135, -0.18),
-          new THREE.Vector2(0.135, -0.02),
-          new THREE.Vector2(0.115, 0.0),
-          new THREE.Vector2(0.088, 0.045),
-          new THREE.Vector2(0.088, 0.12),
-          new THREE.Vector2(0.0, 0.12),
-        ])
-      : new THREE.SplineCurve([
-          new THREE.Vector2(0.0, -0.18),
-          new THREE.Vector2(0.155, -0.18),
-          new THREE.Vector2(0.155, -0.04),
-          new THREE.Vector2(0.17, 0.0),
-          new THREE.Vector2(0.165, 0.055),
-          new THREE.Vector2(0.135, 0.075),
-          new THREE.Vector2(0.0, 0.075),
-        ]);
-    const collarGeo = trackGeo(new THREE.LatheGeometry(pusherCollarSpline.getPoints(16), 36));
+    if (watch.id === 'tag-monaco') {
+      // TAG Heuer Monaco Calibre 11: Iconic horizontal rectangular flat-blade steel pushers off the right vertical flank
+      const monacoCollarGeo = trackGeo(createRoundedLinkGeometry(0.16, 0.14, halfT * 0.72, 0.02));
+      const monacoBladeGeo = trackGeo(createRoundedLinkGeometry(0.28, 0.15, halfT * 0.82, 0.024));
+      const monacoFlankX = getCaseShapeRadius(0, caseR, 'square');
+      [
+        { y: caseR * 0.42, action: 'chrono-toggle' },
+        { y: -caseR * 0.42, action: 'chrono-reset' },
+      ].forEach(({ y, action }) => {
+        const pGroup = new THREE.Group();
+        pGroup.position.set(monacoFlankX + 0.04, y, -0.015 * zStackScale);
+        pGroup.rotation.z = -Math.PI / 2;
+        const collar = new THREE.Mesh(monacoCollarGeo, mats.brushedMetal);
+        const cap = new THREE.Mesh(monacoBladeGeo, mats.polishedMetal);
+        cap.position.y = 0.14;
+        cap.castShadow = true;
+        cap.userData.interactive = action;
+        interactiveMeshes.push(cap);
+        chronoPushers.push(cap);
+        pGroup.add(collar, cap);
+        caseGroup.add(pGroup);
+      });
+    } else if (watch.id === 'rm-tonneau') {
+      // Richard Mille RM 11-03: Sculpted racing-pedal rectangular pushers flush along the right tonneau curve
+      const rmCollarGeo = trackGeo(createRoundedLinkGeometry(0.22, 0.12, halfT * 0.74, 0.02));
+      const rmPedalGeo = trackGeo(createRoundedLinkGeometry(0.42, 0.16, halfT * 0.84, 0.028));
+      [
+        { angle: Math.PI / 5.6, action: 'chrono-toggle' },
+        { angle: -Math.PI / 5.6, action: 'chrono-reset' },
+      ].forEach(({ angle, action }) => {
+        const pGroup = new THREE.Group();
+        const baseAnchorR = getCaseShapeRadius(angle, caseR, caseShape) + 0.04;
+        pGroup.position.set(
+          Math.cos(angle) * baseAnchorR,
+          Math.sin(angle) * baseAnchorR,
+          -0.015 * zStackScale
+        );
+        pGroup.rotation.z = angle - Math.PI / 2;
+        const collar = new THREE.Mesh(rmCollarGeo, mats.oysterflexBelt);
+        const cap = new THREE.Mesh(rmPedalGeo, mats.brushedMetal);
+        cap.position.y = 0.13;
+        cap.castShadow = true;
+        cap.userData.interactive = action;
+        interactiveMeshes.push(cap);
+        chronoPushers.push(cap);
+        pGroup.add(collar, cap);
+        caseGroup.add(pGroup);
+      });
+    } else {
+      const isPumpPusher =
+        watch.brand === 'AVI-8' ||
+        watch.brand === 'OMEGA' ||
+        watch.brand === 'ZENITH' ||
+        watch.brand === 'BREITLING';
+      const pusherCollarSpline = isPumpPusher
+        ? new THREE.SplineCurve([
+            new THREE.Vector2(0.0, -0.18),
+            new THREE.Vector2(0.135, -0.18),
+            new THREE.Vector2(0.135, -0.02),
+            new THREE.Vector2(0.115, 0.0),
+            new THREE.Vector2(0.088, 0.045),
+            new THREE.Vector2(0.088, 0.12),
+            new THREE.Vector2(0.0, 0.12),
+          ])
+        : new THREE.SplineCurve([
+            new THREE.Vector2(0.0, -0.18),
+            new THREE.Vector2(0.155, -0.18),
+            new THREE.Vector2(0.155, -0.04),
+            new THREE.Vector2(0.17, 0.0),
+            new THREE.Vector2(0.165, 0.055),
+            new THREE.Vector2(0.135, 0.075),
+            new THREE.Vector2(0.0, 0.075),
+          ]);
+      const collarGeo = trackGeo(new THREE.LatheGeometry(pusherCollarSpline.getPoints(16), 36));
 
-    const pusherCapSpline = isAvi8
-      ? new THREE.SplineCurve([
-          new THREE.Vector2(0.0, -0.04),
-          new THREE.Vector2(0.095, -0.04),
-          new THREE.Vector2(0.158, -0.01),
-          new THREE.Vector2(0.162, 0.082),
-          new THREE.Vector2(0.138, 0.105),
-          new THREE.Vector2(0.04, 0.11),
-          new THREE.Vector2(0.0, 0.11),
-        ])
-      : new THREE.SplineCurve([
-          new THREE.Vector2(0.0, -0.08),
-          new THREE.Vector2(0.15, -0.08),
-          new THREE.Vector2(0.18, -0.055),
-          new THREE.Vector2(0.182, 0.045),
-          new THREE.Vector2(0.16, 0.075),
-          new THREE.Vector2(0.07, 0.088),
-          new THREE.Vector2(0.0, 0.09),
-        ]);
-    const capGeo = trackGeo(new THREE.LatheGeometry(pusherCapSpline.getPoints(18), 36));
+      const pusherCapSpline = isPumpPusher
+        ? new THREE.SplineCurve([
+            new THREE.Vector2(0.0, -0.04),
+            new THREE.Vector2(0.095, -0.04),
+            new THREE.Vector2(0.158, -0.01),
+            new THREE.Vector2(0.162, 0.082),
+            new THREE.Vector2(0.138, 0.105),
+            new THREE.Vector2(0.04, 0.11),
+            new THREE.Vector2(0.0, 0.11),
+          ])
+        : new THREE.SplineCurve([
+            new THREE.Vector2(0.0, -0.08),
+            new THREE.Vector2(0.15, -0.08),
+            new THREE.Vector2(0.18, -0.055),
+            new THREE.Vector2(0.182, 0.045),
+            new THREE.Vector2(0.16, 0.075),
+            new THREE.Vector2(0.07, 0.088),
+            new THREE.Vector2(0.0, 0.09),
+          ]);
+      const capGeo = trackGeo(new THREE.LatheGeometry(pusherCapSpline.getPoints(18), 36));
 
-    [
-      { angle: Math.PI / 6, action: 'chrono-toggle' },
-      { angle: -Math.PI / 6, action: 'chrono-reset' },
-    ].forEach(({ angle, action }) => {
-      const pusherGroup = new THREE.Group();
-      const baseAnchorR = getCaseShapeRadius(angle, caseR, caseShape) + 0.12;
-      const px = Math.cos(angle) * baseAnchorR;
-      const py = Math.sin(angle) * baseAnchorR;
-      pusherGroup.position.set(px, py, -0.02);
-      pusherGroup.rotation.z = angle - Math.PI / 2;
+      [
+        { angle: Math.PI / 6, action: 'chrono-toggle' },
+        { angle: -Math.PI / 6, action: 'chrono-reset' },
+      ].forEach(({ angle, action }) => {
+        const pusherGroup = new THREE.Group();
+        const baseAnchorR = getCaseShapeRadius(angle, caseR, caseShape) + 0.12;
+        const px = Math.cos(angle) * baseAnchorR;
+        const py = Math.sin(angle) * baseAnchorR;
+        pusherGroup.position.set(px, py, -0.015 * zStackScale);
+        pusherGroup.rotation.z = angle - Math.PI / 2;
+        pusherGroup.scale.setScalar(crownScale);
 
-      const collar = new THREE.Mesh(collarGeo, isAvi8 ? mats.brushedMetal : mats.bezelMetal);
-      const cap = new THREE.Mesh(capGeo, mats.bezelMetal);
-      cap.position.y = 0.15;
-      cap.castShadow = true;
-      cap.userData.interactive = action;
-      interactiveMeshes.push(cap);
-      chronoPushers.push(cap);
-      pusherGroup.add(collar, cap);
-      caseGroup.add(pusherGroup);
-    });
+        const collar = new THREE.Mesh(collarGeo, isPumpPusher ? mats.brushedMetal : mats.bezelMetal);
+        const cap = new THREE.Mesh(capGeo, mats.bezelMetal);
+        cap.position.y = 0.15;
+        cap.castShadow = true;
+        cap.userData.interactive = action;
+        interactiveMeshes.push(cap);
+        chronoPushers.push(cap);
+        pusherGroup.add(collar, cap);
+        caseGroup.add(pusherGroup);
+      });
+    }
   }
 
   // --- 2. SHAPE-CONFORMING SOLID END LINKS + ENCLOSED SPRING-BAR BOLSTERS + INSTANCED BRACELET / CLOSED-LOOP STRAP ---
@@ -2327,8 +2677,11 @@ export function buildWatchAssembly(
   if (beltId === 'bracelet') {
     const isOyster =
       watch.braceletType === 'oyster' || watch.braceletType === 'santos';
+    const isOverseas = watch.braceletType === 'overseas';
     const isIntegrated =
-      watch.braceletType === 'royal-oak' || watch.braceletType === 'nautilus';
+      watch.braceletType === 'royal-oak' ||
+      watch.braceletType === 'nautilus' ||
+      isOverseas;
     const isPresident = watch.braceletType === 'president';
     const linkStyle =
       isOyster || isIntegrated
@@ -2342,20 +2695,38 @@ export function buildWatchAssembly(
     const pitch = arcLen / linkCountPerSide;
     const linkLen = pitch * 1.09;
 
-    const outerGeo = isIntegrated
-      ? trackGeo(createSculptedLinkGeometry(lugSpanWidth * 0.36, linkLen, linkThickness * 0.92, 'oyster'))
-      : isOyster
-        ? trackGeo(createSculptedLinkGeometry(lugSpanWidth * 0.32, linkLen, linkThickness, 'oyster'))
-        : isPresident
-          ? trackGeo(createSculptedLinkGeometry(lugSpanWidth * 0.31, linkLen, linkThickness * 1.14, 'president'))
-          : trackGeo(createSculptedLinkGeometry(lugSpanWidth * 0.23, linkLen, linkThickness * 0.96, 'jubilee'));
-    const centerGeo = isIntegrated
-      ? trackGeo(createSculptedLinkGeometry(lugSpanWidth * 0.26, linkLen * 0.96, linkThickness * 1.02, 'oyster'))
-      : isOyster
-        ? trackGeo(createSculptedLinkGeometry(lugSpanWidth * 0.37, linkLen, linkThickness * 1.08, 'oyster'))
-        : isPresident
-          ? trackGeo(createSculptedLinkGeometry(lugSpanWidth * 0.38, linkLen, linkThickness * 1.2, 'president'))
-          : trackGeo(createSculptedLinkGeometry(lugSpanWidth * 0.175, linkLen, linkThickness * 1.04, 'jubilee'));
+    const outerGeo = isOverseas
+      ? trackGeo(
+          createOverseasHalfMalteseLinkGeometry(
+            lugSpanWidth * 0.35,
+            linkLen,
+            linkThickness * 0.94,
+            false
+          )
+        )
+      : isIntegrated
+        ? trackGeo(createSculptedLinkGeometry(lugSpanWidth * 0.36, linkLen, linkThickness * 0.92, 'oyster'))
+        : isOyster
+          ? trackGeo(createSculptedLinkGeometry(lugSpanWidth * 0.32, linkLen, linkThickness, 'oyster'))
+          : isPresident
+            ? trackGeo(createSculptedLinkGeometry(lugSpanWidth * 0.31, linkLen, linkThickness * 1.14, 'president'))
+            : trackGeo(createSculptedLinkGeometry(lugSpanWidth * 0.23, linkLen, linkThickness * 0.96, 'jubilee'));
+    const centerGeo = isOverseas
+      ? trackGeo(
+          createOverseasHalfMalteseLinkGeometry(
+            lugSpanWidth * 0.3,
+            linkLen * 0.98,
+            linkThickness * 1.06,
+            true
+          )
+        )
+      : isIntegrated
+        ? trackGeo(createSculptedLinkGeometry(lugSpanWidth * 0.26, linkLen * 0.96, linkThickness * 1.02, 'oyster'))
+        : isOyster
+          ? trackGeo(createSculptedLinkGeometry(lugSpanWidth * 0.37, linkLen, linkThickness * 1.08, 'oyster'))
+          : isPresident
+            ? trackGeo(createSculptedLinkGeometry(lugSpanWidth * 0.38, linkLen, linkThickness * 1.2, 'president'))
+            : trackGeo(createSculptedLinkGeometry(lugSpanWidth * 0.175, linkLen, linkThickness * 1.04, 'jubilee'));
     const pinGeo = trackGeo(
       new THREE.CylinderGeometry(0.032, 0.032, lugSpanWidth * 0.99, 12)
     );
@@ -2972,6 +3343,86 @@ export function buildWatchAssembly(
     })
   );
 
+  // Iconic Maison 3D Dial Architectural Bridges & Frames
+  if (watch.id === 'lange-1') {
+    // 3D stepped 18k gold Outsize Date twin-aperture frame at 1:30
+    const odDiv = trackGeo(createRoundedLinkGeometry(0.026, 0.22, 0.032, 0.006));
+    const odFrameGroup = new THREE.Group();
+    odFrameGroup.position.set(dialR * 0.31, dialR * 0.34, 0.174);
+    const topBar = new THREE.Mesh(
+      trackGeo(createRoundedLinkGeometry(0.46, 0.028, 0.028, 0.006)),
+      mats.goldAccent
+    );
+    topBar.position.y = 0.115;
+    const botBar = topBar.clone();
+    botBar.position.y = -0.115;
+    const leftBar = new THREE.Mesh(
+      trackGeo(createRoundedLinkGeometry(0.028, 0.25, 0.028, 0.006)),
+      mats.goldAccent
+    );
+    leftBar.position.x = -0.22;
+    const rightBar = leftBar.clone();
+    rightBar.position.x = 0.22;
+    const centerBar = new THREE.Mesh(odDiv, mats.goldAccent);
+    odFrameGroup.add(topBar, botBar, leftBar, rightBar, centerBar);
+    dialGroup.add(odFrameGroup);
+  } else if (watch.id === 'lange-zeitwerk') {
+    // A. Lange & Söhne Zeitwerk: Sculptural 3D brushed German-silver Time Bridge spanning horizontally across the dial
+    const tbShape = new THREE.Shape();
+    tbShape.moveTo(-dialR * 0.78, -0.14);
+    tbShape.lineTo(-dialR * 0.22, -0.14);
+    tbShape.quadraticCurveTo(0, -dialR * 0.56, dialR * 0.22, -0.14);
+    tbShape.lineTo(dialR * 0.78, -0.14);
+    tbShape.lineTo(dialR * 0.78, 0.16);
+    tbShape.lineTo(-dialR * 0.78, 0.16);
+    tbShape.closePath();
+
+    // Left jumping hour window hole
+    const hHole = new THREE.Path();
+    hHole.moveTo(-dialR * 0.66, -0.09);
+    hHole.lineTo(-dialR * 0.26, -0.09);
+    hHole.lineTo(-dialR * 0.26, 0.11);
+    hHole.lineTo(-dialR * 0.66, 0.11);
+    hHole.closePath();
+    tbShape.holes.push(hHole);
+
+    // Right jumping minute window hole
+    const mHole = new THREE.Path();
+    mHole.moveTo(dialR * 0.26, -0.09);
+    mHole.lineTo(dialR * 0.66, -0.09);
+    mHole.lineTo(dialR * 0.66, 0.11);
+    mHole.lineTo(dialR * 0.26, 0.11);
+    mHole.closePath();
+    tbShape.holes.push(mHole);
+
+    const tbGeo = trackGeo(
+      new THREE.ExtrudeGeometry(tbShape, {
+        depth: 0.026,
+        bevelEnabled: true,
+        bevelThickness: 0.008,
+        bevelSize: 0.008,
+        bevelSegments: 3,
+      })
+    );
+    const tbMesh = new THREE.Mesh(tbGeo, mats.brushedMetal);
+    tbMesh.position.z = 0.168;
+    const ssRing = new THREE.Mesh(
+      trackGeo(new THREE.TorusGeometry(dialR * 0.22, 0.018, 10, 36)),
+      mats.polishedMetal
+    );
+    ssRing.position.set(0, -dialR * 0.46, 0.184);
+    dialGroup.add(tbMesh, ssRing);
+  } else if (watch.id === 'vc-overseas') {
+    // Vacheron Constantin Overseas: Sculpted 3D applied faceted Maltese Cross emblem beneath 12 o'clock
+    const malteseMesh = new THREE.Mesh(
+      trackGeo(createMalteseCrossGeometry(0.118, 0.022, 0.005)),
+      mats.polishedMetal
+    );
+    malteseMesh.position.set(0, dialR * 0.46, 0.18);
+    malteseMesh.castShadow = true;
+    dialGroup.add(malteseMesh);
+  }
+
   if (watch.brand === 'AVI-8') {
     const pilotPipGeo = trackGeo(
       createRoundedLinkGeometry(0.036, 0.095, 0.025, 0.008)
@@ -2986,30 +3437,206 @@ export function buildWatchAssembly(
       pip.rotation.z = angle - Math.PI / 2;
       dialGroup.add(pip);
     }
+  } else if (watch.id === 'tag-monaco') {
+    // TAG Heuer Monaco: Iconic horizontally-oriented faceted steel baton markers + outer luminous dots
+    const monacoBarGeo = trackGeo(createRoundedLinkGeometry(0.24, 0.056, 0.032, 0.009));
+    const monacoDotGeo = trackGeo(new THREE.SphereGeometry(0.032, 12, 10));
+    for (let h = 0; h < 12; h++) {
+      if (h === 3 || h === 6 || h === 9) continue;
+      const angle = Math.PI / 2 - (h / 12) * Math.PI * 2;
+      const radScale = getCaseShapeRadius(angle, 1, caseShape);
+      const hx = Math.cos(angle) * dialR * 0.72 * radScale;
+      const hy = Math.sin(angle) * dialR * 0.72 * radScale;
+      const bar = new THREE.Mesh(monacoBarGeo, mats.polishedMetal);
+      bar.position.set(hx, hy, 0.178);
+      if (h === 0) bar.rotation.z = Math.PI / 2;
+      const dot = new THREE.Mesh(monacoDotGeo, h % 3 === 0 ? mats.crimsonAccent : mats.chromalightLume);
+      dot.position.set(
+        Math.cos(angle) * dialR * 0.86 * radScale,
+        Math.sin(angle) * dialR * 0.86 * radScale,
+        0.178
+      );
+      dot.scale.z = 0.4;
+      dialGroup.add(bar, dot);
+    }
+  } else if (watch.id === 'panerai-luminor') {
+    // Panerai Luminor Marina: Bold Florentine recessed luminous sandwich baton bars
+    const panBarGeo = trackGeo(createRoundedLinkGeometry(0.078, 0.25, 0.022, 0.006));
+    for (let h = 0; h < 12; h++) {
+      if (h === 0 || h === 3 || h === 6 || h === 9) continue;
+      const angle = Math.PI / 2 - (h / 12) * Math.PI * 2;
+      const radScale = getCaseShapeRadius(angle, 1, caseShape);
+      const bar = new THREE.Mesh(panBarGeo, mats.chromalightLume);
+      bar.position.set(
+        Math.cos(angle) * dialR * 0.77 * radScale,
+        Math.sin(angle) * dialR * 0.77 * radScale,
+        0.172
+      );
+      bar.rotation.z = angle - Math.PI / 2;
+      dialGroup.add(bar);
+    }
+  } else if (watch.id === 'blancpain-fifty-fathoms') {
+    // Blancpain Fifty Fathoms: Iconic 3D beveled diamond-shaped luminous markers at non-cardinal hours
+    const diaShape = new THREE.Shape();
+    diaShape.moveTo(0, 0.13);
+    diaShape.lineTo(0.068, 0);
+    diaShape.lineTo(0, -0.13);
+    diaShape.lineTo(-0.068, 0);
+    diaShape.closePath();
+    const diaSurGeo = trackGeo(
+      new THREE.ExtrudeGeometry(diaShape, {
+        depth: 0.026,
+        bevelEnabled: true,
+        bevelThickness: 0.008,
+        bevelSize: 0.008,
+        bevelSegments: 2,
+      })
+    );
+    const diaLumeGeo = trackGeo(
+      new THREE.ExtrudeGeometry(diaShape, { depth: 0.032, bevelEnabled: false })
+    );
+    for (let h = 0; h < 12; h++) {
+      if (h === 0 || h === 3 || h === 6 || h === 9) continue;
+      const angle = Math.PI / 2 - (h / 12) * Math.PI * 2;
+      const holder = new THREE.Group();
+      holder.position.set(Math.cos(angle) * markerR, Math.sin(angle) * markerR, 0.175);
+      holder.rotation.z = angle - Math.PI / 2;
+      const sur = new THREE.Mesh(diaSurGeo, mats.polishedMetal);
+      const lum = new THREE.Mesh(diaLumeGeo, mats.chromalightLume);
+      lum.scale.set(0.7, 0.72, 1);
+      holder.add(sur, lum);
+      dialGroup.add(holder);
+    }
+  } else if (watch.id === 'doxa-sub300') {
+    // DOXA SUB 300: Iconic matte black-framed luminous rectangular dive indices (twin bar at 12h)
+    const doxaFrameGeo = trackGeo(createRoundedLinkGeometry(0.115, 0.25, 0.028, 0.006));
+    const doxaLumeGeo = trackGeo(createRoundedLinkGeometry(0.066, 0.19, 0.034, 0.006));
+    for (let h = 0; h < 12; h++) {
+      if (h === 3) continue;
+      const angle = Math.PI / 2 - (h / 12) * Math.PI * 2;
+      const holder = new THREE.Group();
+      holder.position.set(Math.cos(angle) * dialR * 0.76, Math.sin(angle) * dialR * 0.76, 0.176);
+      holder.rotation.z = angle - Math.PI / 2;
+      if (h === 0) {
+        [-0.062, 0.062].forEach((ox) => {
+          const f = new THREE.Mesh(doxaFrameGeo, mats.matteBlackHands);
+          f.scale.set(0.72, 1.05, 1);
+          f.position.x = ox;
+          const l = new THREE.Mesh(doxaLumeGeo, mats.chromalightLume);
+          l.scale.set(0.72, 1.02, 1);
+          l.position.x = ox;
+          holder.add(f, l);
+        });
+      } else {
+        holder.add(
+          new THREE.Mesh(doxaFrameGeo, mats.matteBlackHands),
+          new THREE.Mesh(doxaLumeGeo, mats.chromalightLume)
+        );
+      }
+      dialGroup.add(holder);
+    }
+  } else if (watch.id === 'longines-zulu-time') {
+    // Longines Spirit Zulu Time: 3D applied diamond luminous outer pips + 5 miniature applied gold stars above 6h
+    const pipShape = new THREE.Shape();
+    pipShape.moveTo(0, 0.055);
+    pipShape.lineTo(0.044, 0);
+    pipShape.lineTo(0, -0.055);
+    pipShape.lineTo(-0.044, 0);
+    pipShape.closePath();
+    const pipGeo = trackGeo(new THREE.ExtrudeGeometry(pipShape, { depth: 0.022, bevelEnabled: false }));
+    for (let h = 0; h < 12; h++) {
+      if (h === 6) continue;
+      const angle = Math.PI / 2 - (h / 12) * Math.PI * 2;
+      const pip = new THREE.Mesh(pipGeo, mats.chromalightLume);
+      pip.position.set(Math.cos(angle) * dialR * 0.87, Math.sin(angle) * dialR * 0.87, 0.174);
+      pip.rotation.z = angle - Math.PI / 2;
+      dialGroup.add(pip);
+    }
+    const starGeo = trackGeo(new THREE.OctahedronGeometry(0.024, 0));
+    for (let s = -2; s <= 2; s++) {
+      const star = new THREE.Mesh(starGeo, mats.goldAccent);
+      star.position.set(s * 0.072, -dialR * 0.34, 0.18);
+      star.scale.set(1, 1, 0.38);
+      dialGroup.add(star);
+    }
+  } else if (watch.id === 'bulgari-octo-finissimo') {
+    // Bulgari Octo Finissimo: Ultra-slim architectural matte-black 3D applied bar indices
+    const octoBarGeo = trackGeo(createRoundedLinkGeometry(0.038, 0.21, 0.02, 0.005));
+    for (let h = 0; h < 12; h++) {
+      if (h === 0 || h === 6 || h === 7 || h === 8) continue;
+      const angle = Math.PI / 2 - (h / 12) * Math.PI * 2;
+      const bar = new THREE.Mesh(octoBarGeo, mats.matteBlackHands);
+      bar.position.set(Math.cos(angle) * dialR * 0.78, Math.sin(angle) * dialR * 0.78, 0.175);
+      bar.rotation.z = angle - Math.PI / 2;
+      dialGroup.add(bar);
+    }
+  } else if (watch.id === 'jlc-reverso') {
+    // Jaeger-LeCoultre Reverso Tribute: Slim 3D faceted diamond-cut metallic wedge indices (zero lume)
+    const revWedgeGeo = trackGeo(createRoundedLinkGeometry(0.042, 0.19, 0.024, 0.006));
+    for (let h = 0; h < 12; h++) {
+      if (h === 6) continue;
+      const angle = Math.PI / 2 - (h / 12) * Math.PI * 2;
+      const radScale = getCaseShapeRadius(angle, 1, caseShape);
+      const bar = new THREE.Mesh(revWedgeGeo, mats.polishedMetal);
+      bar.position.set(
+        Math.cos(angle) * dialR * 0.76 * radScale,
+        Math.sin(angle) * dialR * 0.76 * radScale,
+        0.176
+      );
+      bar.rotation.z = angle - Math.PI / 2;
+      if (h === 0) bar.scale.set(1.5, 1.12, 1);
+      dialGroup.add(bar);
+    }
+  } else if (watch.id === 'casio-casioak-ga2100') {
+    // G-Shock CasiOak GA-2100: 3D angled architectural resin chapter-ring hour markers + 9h day pointer
+    const oakIdxGeo = trackGeo(createRoundedLinkGeometry(0.068, 0.22, 0.036, 0.008));
+    for (let h = 0; h < 12; h++) {
+      if (h === 4 || h === 5) continue;
+      const angle = Math.PI / 2 - (h / 12) * Math.PI * 2;
+      const bar = new THREE.Mesh(oakIdxGeo, mats.brushedMetal);
+      bar.position.set(Math.cos(angle) * dialR * 0.81, Math.sin(angle) * dialR * 0.81, 0.184);
+      bar.rotation.z = angle - Math.PI / 2;
+      if (h === 0) bar.scale.set(1.45, 1.12, 1);
+      dialGroup.add(bar);
+    }
+    // 9 o'clock retrograde Day-of-Week sub-hand (pointing to current day)
+    const dayIdx = new Date().getDay();
+    const dayAngle = Math.PI * 0.42 - (dayIdx / 6) * Math.PI * 0.84;
+    const dayPointer = new THREE.Group();
+    dayPointer.position.set(-dialR * 0.42, 0.02, 0.186);
+    dayPointer.rotation.z = dayAngle;
+    const dpBlade = new THREE.Mesh(
+      trackGeo(createFacetedHandGeometry(0.24, 0.022, 0.005, 0.01)),
+      mats.chromalightLume
+    );
+    const dpHub = new THREE.Mesh(
+      trackGeo(new THREE.CylinderGeometry(0.036, 0.036, 0.02, 16)),
+      mats.matteBlackHands
+    );
+    dpHub.rotation.x = Math.PI / 2;
+    dayPointer.add(dpBlade, dpHub);
+    dialGroup.add(dayPointer);
   } else if (
     watch.brand !== 'CARTIER' &&
-    watch.brand !== 'JAEGER-LECOULTRE' &&
     watch.brand !== 'A. LANGE & SÖHNE' &&
     watch.brand !== 'RICHARD MILLE' &&
-    watch.brand !== 'PANERAI' &&
-    watch.brand !== 'TAG HEUER' &&
     watch.brand !== 'IWC SCHAFFHAUSEN' &&
     watch.brand !== 'BREGUET' &&
     watch.brand !== 'F.P. JOURNE' &&
     watch.brand !== 'MB&F' &&
-    watch.brand !== 'BULGARI' &&
-    watch.brand !== 'LONGINES' &&
     watch.brand !== 'HAMILTON' &&
     watch.brand !== 'NOMOS GLASHÜTTE' &&
-    watch.brand !== 'BLANCPAIN' &&
-    watch.brand !== 'DOXA' &&
     watch.brand !== 'PIAGET' &&
     watch.brand !== 'CASIO' &&
     watch.id !== 'pp-worldtime'
   ) {
+    const isTriCompax = watch.hasChronoSubdials === 3;
     for (let h = 0; h < 12; h++) {
-      if (h === 3 && (watch.hasCyclops || watch.hasDateWindow) && watch.id !== 'omega-seamaster' && watch.id !== 'breitling-navitimer' && watch.id !== 'zenith-el-primero') continue;
-      if (h === 6 && (watch.id === 'omega-seamaster' || watch.id === 'breitling-navitimer')) continue;
+      // Zero subdial or aperture collisions!
+      if (isTriCompax && (h === 3 || h === 6 || h === 9)) continue;
+      if (watch.id === 'skydweller' && h === 6) continue;
+      if (h === 3 && (watch.hasCyclops || watch.hasDateWindow) && watch.id !== 'omega-seamaster') continue;
+      if (h === 6 && watch.id === 'omega-seamaster') continue;
       if (h === 0 && watch.hasDayWindow) continue;
 
       const angle = Math.PI / 2 - (h / 12) * Math.PI * 2;
@@ -3025,7 +3652,25 @@ export function buildWatchAssembly(
       const useGiltSurround = watch.brand === 'ROLEX' || watch.id === 'tudor-bb58';
       const surMat = useGiltSurround ? mats.goldAccent : mats.polishedMetal;
 
-      if (
+      if (h === 0 && watch.id === 'datejust') {
+        // Rolex Datejust iconic 3D applied 5-point gold Coronet at 12 o'clock
+        const base = new THREE.Mesh(
+          trackGeo(createRoundedLinkGeometry(0.14, 0.036, 0.026, 0.008)),
+          mats.goldAccent
+        );
+        base.position.y = -0.075;
+        markerHolder.add(base);
+        [-0.06, -0.03, 0, 0.03, 0.06].forEach((cx, idx) => {
+          const sh = idx === 2 ? 0.135 : idx === 1 || idx === 3 ? 0.115 : 0.092;
+          const sp = new THREE.Mesh(
+            trackGeo(new THREE.CapsuleGeometry(0.009, sh, 4, 8)),
+            mats.goldAccent
+          );
+          sp.position.set(cx, -0.06 + sh * 0.48, 0.005);
+          sp.rotation.z = -(idx - 2) * 0.18;
+          markerHolder.add(sp);
+        });
+      } else if (
         h === 0 &&
         (watch.id === 'submariner' ||
           watch.id === 'yachtmaster' ||
@@ -3038,13 +3683,30 @@ export function buildWatchAssembly(
         triLume.scale.set(0.75, 0.75, 1.12);
         markerHolder.add(triSurround, triLume);
       } else if (
+        h === 0 &&
+        (watch.id === 'ap-royal-oak' ||
+          watch.id === 'pp-nautilus' ||
+          watch.id === 'vc-overseas')
+      ) {
+        // Royal Oak & Nautilus iconic twin slim rounded-tip 12 o'clock white-gold batons
+        [-0.048, 0.048].forEach((ox) => {
+          const s = new THREE.Mesh(batonSurroundGeo, mats.polishedMetal);
+          s.scale.set(0.58, 0.92, 1);
+          s.position.x = ox;
+          const l = new THREE.Mesh(batonLumeGeo, mats.chromalightLume);
+          l.scale.set(0.56, 0.86, 1);
+          l.position.x = ox;
+          markerHolder.add(s, l);
+        });
+      } else if (
+        watch.id === 'gs-snowflake' ||
         watch.id === 'gs-white-birch' ||
         watch.id === 'moser-streamliner'
       ) {
-        // Diamond-cut Zaratsu / Moser faceted metallic indices (zero chunky Chromalight pills)
+        // Diamond-cut Zaratsu (Snowflake & White Birch) / Moser faceted metallic indices (ZERO lume pills!)
         markerHolder.rotation.z = angle - Math.PI / 2;
         const facetGeo = trackGeo(
-          createRoundedLinkGeometry(h === 0 ? 0.115 : 0.068, h === 0 ? 0.28 : 0.22, 0.034, 0.008)
+          createRoundedLinkGeometry(h === 0 ? 0.118 : 0.064, h === 0 ? 0.28 : 0.22, 0.034, 0.008)
         );
         const facetBar = new THREE.Mesh(facetGeo, mats.polishedMetal);
         markerHolder.add(facetBar);
@@ -3060,7 +3722,6 @@ export function buildWatchAssembly(
         watch.id === 'vc-overseas' ||
         watch.id === 'breitling-navitimer' ||
         watch.id === 'zenith-el-primero' ||
-        watch.id === 'gs-snowflake' ||
         watch.id === 'gp-laureato' ||
         (watch.id === 'omega-seamaster' && h === 0) ||
         h === 6 ||
@@ -3078,9 +3739,19 @@ export function buildWatchAssembly(
           watch.id === 'zenith-el-primero' ||
           watch.id === 'gp-laureato'
         ) {
-          markerHolder.scale.set(0.76, h === 0 ? 1.05 : 0.82, 1);
+          markerHolder.scale.set(0.74, h === 0 ? 1.02 : 0.8, 1);
         }
         markerHolder.add(sur, lum);
+        // Speedmaster Moonwatch iconic twin 12 o'clock luminous dots flanking the 12h baton
+        if (watch.id === 'omega-speedmaster' && h === 0) {
+          const spDotGeo = trackGeo(new THREE.SphereGeometry(0.036, 12, 10));
+          [-0.095, 0.095].forEach((dx) => {
+            const dot = new THREE.Mesh(spDotGeo, mats.chromalightLume);
+            dot.position.set(dx, 0.04, 0.012);
+            dot.scale.z = 0.4;
+            markerHolder.add(dot);
+          });
+        }
       } else {
         const sur = new THREE.Mesh(surroundGeoRound, surMat);
         sur.position.z = 0.008;
@@ -3130,7 +3801,9 @@ export function buildWatchAssembly(
     watch.handStyle === 'breguet-pomme' ||
     watch.id === 'nomos-tangente'
       ? mats.bluedHands
-      : watch.id === 'bulgari-octo-finissimo'
+      : watch.id === 'bulgari-octo-finissimo' ||
+          watch.id === 'doxa-sub300' ||
+          watch.id === 'casio-casioak-ga2100'
         ? mats.matteBlackHands
         : watch.id === 'fpj-chronometre-bleu'
           ? mats.ivoryCreamHands
@@ -3149,7 +3822,7 @@ export function buildWatchAssembly(
   mainHandsGroup.add(pinionCap);
 
   const hourHand = new THREE.Group();
-  const hLen = dialR * 0.56 * handLenScale;
+  const hLen = dialR * (watch.id === 'doxa-sub300' ? 0.44 : 0.56) * handLenScale;
   const isSlimStem =
     watch.handStyle === 'breguet-pomme' ||
     watch.handStyle === 'syringe' ||
@@ -3412,29 +4085,34 @@ export function buildWatchAssembly(
 
   const minuteHand = new THREE.Group();
   minuteHand.position.z = 0.026;
-  const mLen = dialR * 0.85 * handLenScale;
+  const mLen = dialR * (watch.id === 'doxa-sub300' ? 0.88 : 0.85) * handLenScale;
+  const minuteHandMat = watch.id === 'doxa-sub300' ? mats.orangeAccent : activeHandMat;
   const mStemMesh = new THREE.Mesh(
     trackGeo(
       createFacetedHandGeometry(
         mLen,
-        isSlimStem
-          ? 0.017
-          : watch.handStyle === 'dauphine' || watch.handStyle === 'worldtime-ring'
-            ? 0.052
-            : 0.044,
-        isSlimStem
-          ? 0.006
-          : watch.handStyle === 'dauphine' || watch.handStyle === 'worldtime-ring'
-            ? 0.005
-            : 0.012,
+        watch.id === 'doxa-sub300'
+          ? 0.082
+          : isSlimStem
+            ? 0.017
+            : watch.handStyle === 'dauphine' || watch.handStyle === 'worldtime-ring'
+              ? 0.052
+              : 0.044,
+        watch.id === 'doxa-sub300'
+          ? 0.032
+          : isSlimStem
+            ? 0.006
+            : watch.handStyle === 'dauphine' || watch.handStyle === 'worldtime-ring'
+              ? 0.005
+              : 0.012,
         0.016
       )
     ),
-    activeHandMat
+    minuteHandMat
   );
   const mBoss = new THREE.Mesh(
     trackGeo(new THREE.CylinderGeometry(0.06, 0.06, 0.02, 24)),
-    activeHandMat
+    minuteHandMat
   );
   mBoss.rotation.x = Math.PI / 2;
   if (watch.handStyle === 'skeleton-sword') {
@@ -3699,21 +4377,33 @@ export function buildWatchAssembly(
       );
       bpRedTip.position.y = sLen * 0.82;
       secondHand.add(bpRedTip);
+    } else if (watch.id === 'zenith-el-primero') {
+      // Iconic Zenith El Primero crimson sweep hand with luminous rectangular paddle tip
+      const zPad = new THREE.Mesh(
+        trackGeo(createRoundedLinkGeometry(0.058, 0.088, 0.016, 0.004)),
+        mats.chromalightLume
+      );
+      zPad.position.y = sLen * 0.72;
+      secondHand.add(zPad);
+    } else if (watch.id === 'hamilton-murph') {
+      // Iconic Interstellar "EUREKA" Morse-code gold-lacquer dots along the Murph seconds hand
+      const morseDotGeo = trackGeo(new THREE.SphereGeometry(0.011, 8, 8));
+      const morseDashGeo = trackGeo(new THREE.CapsuleGeometry(0.008, 0.028, 4, 6));
+      [0.24, 0.31, 0.36, 0.41, 0.48, 0.54, 0.61, 0.68, 0.75, 0.81].forEach((frac, idx) => {
+        const isDash = idx === 2 || idx === 4 || idx === 7 || idx === 9;
+        const m = new THREE.Mesh(isDash ? morseDashGeo : morseDotGeo, mats.goldAccent);
+        m.position.set(0, sLen * frac, 0.008);
+        secondHand.add(m);
+      });
     } else if (
-      !watch.hasSmallSeconds &&
-      watch.brand !== 'CARTIER' &&
-      watch.brand !== 'GRAND SEIKO' &&
-      watch.brand !== 'A. LANGE & SÖHNE' &&
-      watch.brand !== 'JAEGER-LECOULTRE' &&
-      watch.brand !== 'BREGUET' &&
-      watch.brand !== 'H. MOSER & CIE' &&
-      watch.brand !== 'GIRARD-PERREGAUX' &&
-      watch.brand !== 'HAMILTON' &&
-      watch.brand !== 'LONGINES' &&
-      watch.brand !== 'NOMOS GLASHÜTTE' &&
-      watch.brand !== 'F.P. JOURNE' &&
-      watch.brand !== 'BULGARI'
+      watch.id === 'submariner' ||
+      watch.id === 'gmt' ||
+      watch.id === 'explorer2' ||
+      watch.id === 'yachtmaster' ||
+      watch.id === 'omega-seamaster' ||
+      watch.id === 'avi8-spitfire'
     ) {
+      // Authentic diver / GMT / Spitfire lollipop seconds hand
       const sLollipopRim = new THREE.Mesh(
         trackGeo(new THREE.TorusGeometry(0.05, 0.011, 10, 24)),
         sMat
@@ -3728,6 +4418,14 @@ export function buildWatchAssembly(
       sLollipop.position.y =
         watch.id === 'avi8-spitfire' ? -sLen * 0.22 : sLen * 0.7;
       secondHand.add(sLollipopRim, sLollipop);
+      if (watch.id === 'omega-seamaster') {
+        const smRedTip = new THREE.Mesh(
+          trackGeo(createFacetedHandGeometry(sLen * 0.16, 0.014, 0.004, 0.011)),
+          mats.crimsonAccent
+        );
+        smRedTip.position.y = sLen * 0.84;
+        secondHand.add(smRedTip);
+      }
     }
   }
   if (watch.id === 'lange-1') {
@@ -3753,6 +4451,7 @@ export function buildWatchAssembly(
   }
   if (
     watch.isDigitalDisplay ||
+    watch.id === 'ap-royal-oak' ||
     watch.id === 'mbf-lm101' ||
     watch.id === 'pp-worldtime' ||
     watch.id === 'cartier-tank-louis' ||
@@ -3892,10 +4591,17 @@ export function buildWatchAssembly(
       laureatoOctMesh.castShadow = true;
       bezelGroup.add(laureatoOctMesh);
     } else {
+      const shapedBezelOuterR =
+        watch.id === 'cartier-tank-louis' ? bezelOuterR * 0.94 : bezelOuterR;
       const shapedBezelGeo = trackGeo(
-        createShapedBezelRingGeometry(bezelInnerR, bezelOuterR, caseShape)
+        createShapedBezelRingGeometry(bezelInnerR, shapedBezelOuterR, caseShape)
       );
-      const shapedBezelMesh = new THREE.Mesh(shapedBezelGeo, mats.brushedMetal);
+      const shapedBezelMesh = new THREE.Mesh(
+        shapedBezelGeo,
+        watch.id === 'cartier-tank-louis' || watch.id === 'cartier-crash'
+          ? mats.polishedMetal
+          : mats.brushedMetal
+      );
       shapedBezelMesh.castShadow = true;
       bezelGroup.add(shapedBezelMesh);
 
@@ -4032,32 +4738,30 @@ export function buildWatchAssembly(
       flutedMesh.castShadow = true;
       bezelGroup.add(flutedMesh);
     } else if (watch.bezelType === 'overseas') {
-      // Vacheron Constantin Overseas: smooth satin ring + 6 chamfered Maltese-cross notched bosses
-      const smoothProfile = new THREE.SplineCurve([
+      // Vacheron Constantin Overseas 4520V: stepped circular satin-brushed under-bezel
+      // crowned by a continuous mirror-polished 6-notched Maltese Cross bezel ring
+      const underProfile = new THREE.SplineCurve([
         new THREE.Vector2(bezelInnerR, -0.02),
-        new THREE.Vector2(bezelInnerR + 0.02, 0.128),
-        new THREE.Vector2((bezelInnerR + bezelOuterR) * 0.52, 0.14),
-        new THREE.Vector2(bezelOuterR * 0.96, 0.088),
+        new THREE.Vector2(bezelInnerR + 0.02, 0.088),
+        new THREE.Vector2(bezelOuterR * 0.94, 0.086),
+        new THREE.Vector2(bezelOuterR * 0.985, 0.052),
         new THREE.Vector2(bezelOuterR, -0.04),
       ]);
-      const ovGeo = trackGeo(new THREE.LatheGeometry(smoothProfile.getPoints(18), 96));
-      ovGeo.rotateX(Math.PI / 2);
-      const ovBase = new THREE.Mesh(ovGeo, mats.brushedMetal);
-      ovBase.castShadow = true;
-      bezelGroup.add(ovBase);
+      const underGeo = trackGeo(new THREE.LatheGeometry(underProfile.getPoints(18), 96));
+      underGeo.rotateX(Math.PI / 2);
+      const underBezel = new THREE.Mesh(underGeo, mats.brushedMetal);
+      underBezel.castShadow = true;
+      underBezel.receiveShadow = true;
+      bezelGroup.add(underBezel);
 
-      const wingGeo = trackGeo(
-        createRoundedLinkGeometry(0.32, (bezelOuterR - bezelInnerR) * 0.78, 0.052, 0.015)
+      const malteseRingGeo = trackGeo(
+        createOverseasBezelRingGeometry(bezelInnerR, bezelOuterR, 0.064)
       );
-      const wingR = (bezelInnerR + bezelOuterR) * 0.51;
-      for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
-        const wing = new THREE.Mesh(wingGeo, mats.polishedMetal);
-        wing.position.set(Math.cos(a) * wingR, Math.sin(a) * wingR, 0.135);
-        wing.rotation.z = a - Math.PI / 2;
-        wing.castShadow = true;
-        bezelGroup.add(wing);
-      }
+      const malteseRing = new THREE.Mesh(malteseRingGeo, mats.polishedMetal);
+      malteseRing.position.z = 0.068;
+      malteseRing.castShadow = true;
+      malteseRing.receiveShadow = true;
+      bezelGroup.add(malteseRing);
     } else if (watch.bezelType === 'smooth' || watch.id === 'bulgari-octo-finissimo') {
       const smoothProfile =
         watch.id === 'avi8-spitfire' || watch.id === 'bulgari-octo-finissimo'
@@ -4954,20 +5658,29 @@ export function buildWatchAssembly(
           perpetualRotor.add(arm);
         }
       } else if (isVacheron) {
-        // Openworked Maltese Cross central arms + V-arms
-        for (let m = 0; m < 4; m++) {
-          const ma = (m / 4) * Math.PI * 2;
-          const crossArm = new THREE.Mesh(
-            trackGeo(createRoundedLinkGeometry(0.18, 0.058, 0.03, 0.006)),
-            mats.goldAccent
-          );
-          crossArm.position.set(Math.cos(ma) * 0.14, Math.sin(ma) * 0.14, 0.01);
-          crossArm.rotation.z = ma;
-          perpetualRotor.add(crossArm);
+        // Authentic Caliber 5100 22k gold Wind Rose (Compass Rose) openworked oscillating weight
+        const roseRing = new THREE.Mesh(
+          trackGeo(new THREE.TorusGeometry(rIn * 0.56, 0.022, 10, 36)),
+          mats.goldAccent
+        );
+        perpetualRotor.add(roseRing);
+
+        // 4 long cardinal + 4 intercardinal diamond-faceted compass points
+        for (let p = 0; p < 8; p++) {
+          const pa = (p / 8) * Math.PI * 2;
+          const isCardinal = p % 2 === 0;
+          const ptLen = isCardinal ? rIn * 0.88 : rIn * 0.62;
+          const ptW = isCardinal ? 0.056 : 0.036;
+          const ptGeo = trackGeo(createFacetedHandGeometry(ptLen, ptW, 0.005, 0.022));
+          const ptMesh = new THREE.Mesh(ptGeo, mats.goldAccent);
+          ptMesh.rotation.z = pa - Math.PI / 2;
+          ptMesh.position.z = 0.006;
+          perpetualRotor.add(ptMesh);
         }
-        [-0.48, 0.48].forEach((ang) => {
+        // Sculpted V-spokes linking the Wind Rose cleanly to the 22k peripheral oscillating mass
+        [-0.52, 0, 0.52].forEach((ang) => {
           const spoke = new THREE.Mesh(
-            trackGeo(createRoundedLinkGeometry(rIn, 0.042, 0.03, 0.006)),
+            trackGeo(createRoundedLinkGeometry(rIn * 0.96, 0.04, 0.03, 0.006)),
             mats.goldAccent
           );
           spoke.position.set(Math.cos(ang) * rIn * 0.52, Math.sin(ang) * rIn * 0.52, 0);

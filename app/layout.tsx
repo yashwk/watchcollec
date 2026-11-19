@@ -1,10 +1,24 @@
 import type { Metadata } from 'next';
-import { Cormorant_Garamond, Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
+import {
+  Cinzel,
+  Cormorant_Garamond,
+  JetBrains_Mono,
+  Oswald,
+  Plus_Jakarta_Sans,
+} from 'next/font/google';
 import './globals.css';
+
+const cinzel = Cinzel({
+  subsets: ['latin'],
+  weight: ['500', '600', '700'],
+  variable: '--font-cinzel',
+  display: 'swap',
+});
 
 const cormorant = Cormorant_Garamond({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
+  style: ['normal', 'italic'],
   variable: '--font-cormorant',
   display: 'swap',
 });
@@ -16,9 +30,16 @@ const jakarta = Plus_Jakarta_Sans({
   display: 'swap',
 });
 
+const oswald = Oswald({
+  subsets: ['latin'],
+  weight: ['500', '600', '700'],
+  variable: '--font-oswald',
+  display: 'swap',
+});
+
 const jetbrains = JetBrains_Mono({
   subsets: ['latin'],
-  weight: ['400', '500'],
+  weight: ['400', '500', '600', '700'],
   variable: '--font-jetbrains',
   display: 'swap',
 });
@@ -45,7 +66,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${cormorant.variable} ${jakarta.variable} ${jetbrains.variable}`}
+      className={`${cinzel.variable} ${cormorant.variable} ${jakarta.variable} ${oswald.variable} ${jetbrains.variable}`}
     >
       <body suppressHydrationWarning className="bg-[#0A0D0C] text-[#F4F2ED] antialiased selection:bg-[#006039] selection:text-white">
         {children}

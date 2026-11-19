@@ -42,9 +42,11 @@ import {
   DialDateOverride,
   createCausticsFloorTexture,
   createMoteTexture,
+  invalidateStaticTextTextures,
   releaseStaticTextures,
   retainStaticTextures,
 } from './textures';
+import { horoFont, invalidateCanvasFontCache } from './typography';
 import { WatchRig, buildWatchAssembly } from './watchBuilder';
 
 export interface StudioState {
@@ -271,6 +273,8 @@ export class WatchStudioEngine {
   private lastDigitalSecBucket = -1;
   private lastDigitalMinBucket = -1;
   private currentDateOverride: DialDateOverride | undefined = undefined;
+  private fontRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastLoadedFontCount = 0;
 
   private currentExplode = 0;
   private bezelTargetAngle = 0;
@@ -558,8 +562,62 @@ export class WatchStudioEngine {
       this.handleContextRestored
     );
 
+    if (typeof document !== 'undefined' && 'fonts' in document) {
+      this.lastLoadedFontCount = Array.from(document.fonts).filter(
+        (f) => f.status === 'loaded'
+      ).length;
+      document.fonts.addEventListener?.('loadingdone', this.handleFontsReady);
+      // Eagerly fetch Next.js horological web fonts used exclusively on Canvas2D textures
+      const fontSpecs = [
+        horoFont('engraved', 600, 24),
+        horoFont('engraved', 700, 24),
+        horoFont('serif', 600, 24),
+        horoFont('serif', 600, 24, true),
+        horoFont('condensed', 600, 24),
+        horoFont('condensed', 700, 24),
+        horoFont('sans', 600, 24),
+        horoFont('sans', 700, 24),
+        horoFont('mono', 600, 24),
+        horoFont('mono', 700, 24),
+      ];
+      Promise.allSettled([
+        document.fonts.ready,
+        ...fontSpecs.map((spec) => document.fonts.load(spec)),
+      ]).then(() => {
+        this.handleFontsReady();
+      });
+    }
+
     this.tick();
   }
+
+  private handleFontsReady = () => {
+    if (this.disposed || typeof document === 'undefined' || !('fonts' in document)) {
+      return;
+    }
+    const loadedCount = Array.from(document.fonts).filter(
+      (f) => f.status === 'loaded'
+    ).length;
+    if (loadedCount === 0 || loadedCount <= this.lastLoadedFontCount) {
+      return;
+    }
+    if (this.fontRefreshTimer) {
+      clearTimeout(this.fontRefreshTimer);
+    }
+    this.fontRefreshTimer = setTimeout(() => {
+      this.fontRefreshTimer = null;
+      if (this.disposed) return;
+      this.lastLoadedFontCount = Array.from(document.fonts).filter(
+        (f) => f.status === 'loaded'
+      ).length;
+      invalidateCanvasFontCache();
+      invalidateStaticTextTextures();
+      this.rebuildWatch();
+      if (this.state.compareModelId) {
+        this.rebuildCompareWatch();
+      }
+    }, 80);
+  };
 
   private getEffectiveNowMs(): number {
     return this.state.liveTime
@@ -2473,9 +2531,16 @@ export class WatchStudioEngine {
     horologyAudio.setEnabled(false);
     cancelAnimationFrame(this.frameId);
     clearTimeout(this.frameId);
+    if (this.fontRefreshTimer) {
+      clearTimeout(this.fontRefreshTimer);
+      this.fontRefreshTimer = null;
+    }
 
     window.removeEventListener('resize', this.handleResize);
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    if (typeof document !== 'undefined' && 'fonts' in document) {
+      document.fonts.removeEventListener?.('loadingdone', this.handleFontsReady);
+    }
     this.renderer.domElement.removeEventListener('pointerdown', this.handlePointerDown);
     this.renderer.domElement.removeEventListener('pointermove', this.handlePointerMove);
     this.renderer.domElement.removeEventListener('pointerleave', this.handlePointerLeave);

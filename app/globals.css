@@ -2,7 +2,9 @@
 
 @theme {
   --font-serif: var(--font-cormorant), Georgia, serif;
+  --font-engraved: var(--font-cinzel), Georgia, serif;
   --font-sans: var(--font-jakarta), system-ui, sans-serif;
+  --font-condensed: var(--font-oswald), system-ui, sans-serif;
   --font-mono: var(--font-jetbrains), monospace;
 }
 

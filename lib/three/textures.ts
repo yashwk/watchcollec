@@ -1,5 +1,13 @@
 import * as THREE from 'three';
 import { BezelOption, DialOption, WatchBrand, WatchSpec } from '@/lib/watches';
+import {
+  drawArcPadText,
+  drawBezelEngravedText,
+  drawDialCartouche,
+  drawPadText,
+  drawSevenSegmentString,
+  horoFont,
+} from './typography';
 
 // Shared GPU texture cache for immutable procedural maps (cuts rebuild cost & GC pressure)
 const staticTextureCache = new Map<string, THREE.Texture>();
@@ -14,6 +22,23 @@ export function releaseStaticTextures() {
   if (staticTextureRefCount === 0) {
     staticTextureCache.forEach((tex) => tex.dispose());
     staticTextureCache.clear();
+  }
+}
+
+/**
+ * Disposes and clears text-bearing cached static textures so they re-render
+ * crisply once web fonts finish loading via document.fonts.ready.
+ */
+export function invalidateStaticTextTextures() {
+  for (const [key, tex] of staticTextureCache.entries()) {
+    if (
+      key.startsWith('skydisc:') ||
+      key.startsWith('reversoBack:') ||
+      key.startsWith('quartz-pcb:')
+    ) {
+      tex.dispose();
+      staticTextureCache.delete(key);
+    }
   }
 }
 
@@ -118,6 +143,8 @@ export function createDialTexture(
     const t = new THREE.CanvasTexture(canvas);
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = maxAnisotropy;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.magFilter = THREE.LinearFilter;
     t.needsUpdate = true;
     return t;
   };
@@ -405,13 +432,15 @@ export function createDialTexture(
       // Milgauss signature orange 5-minute perimeter numerals
       if (watch.id === 'milgauss' && isMajor) {
         const mLabel = i === 0 ? '60' : String(i);
-        ctx.save();
-        ctx.fillStyle = '#F97316';
-        ctx.font = '700 15px "JetBrains Mono", monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(mLabel, Math.cos(a) * (radius * 0.845), Math.sin(a) * (radius * 0.845));
-        ctx.restore();
+        drawPadText(ctx, mLabel, Math.cos(a) * (radius * 0.845), Math.sin(a) * (radius * 0.845), {
+          role: 'condensed',
+          weight: 700,
+          size: 17,
+          color: '#FB923C',
+          tracking: 0.6,
+          halo: 'dark',
+          inkStroke: 0.4,
+        });
       }
     }
 
@@ -487,16 +516,21 @@ export function createDialTexture(
     }
 
     // 5-second crisp numerals along perimeter flange
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
     for (let s = 5; s <= 60; s += 5) {
       const a = (s / 60) * Math.PI * 2 - Math.PI / 2;
-      ctx.fillStyle = s === 60 ? '#E0543E' : softCream;
-      ctx.font = '700 17px "JetBrains Mono", monospace';
-      ctx.fillText(
+      drawPadText(
+        ctx,
         s === 60 ? '60' : String(s).padStart(2, '0'),
         Math.cos(a) * (radius * 0.822),
-        Math.sin(a) * (radius * 0.822)
+        Math.sin(a) * (radius * 0.822),
+        {
+          role: 'condensed',
+          weight: 600,
+          size: 18,
+          color: s === 60 ? '#E85C45' : softCream,
+          tracking: 0.6,
+          halo: 'dark',
+        }
       );
     }
 
@@ -507,20 +541,27 @@ export function createDialTexture(
       const rx = Math.cos(a) * (radius * 0.68);
       const ry = Math.sin(a) * (radius * 0.68);
       if (h === 12) {
-        // Double luminous pilot bars + 12 chevron
         ctx.fillStyle = bronzeRim;
         ctx.beginPath();
-        ctx.roundRect(-24, ry - 20, 48, 40, 6);
+        ctx.roundRect(-25, ry - 21, 50, 42, 6);
         ctx.fill();
-        ctx.fillStyle = creamInk;
-        ctx.font = '800 40px "JetBrains Mono", "Plus Jakarta Sans", sans-serif';
-        ctx.fillText('12', 0, ry + 1);
+        drawPadText(ctx, '12', 0, ry + 1, {
+          role: 'condensed',
+          weight: 700,
+          size: 40,
+          color: creamInk,
+          tracking: 1,
+          halo: 'dark',
+        });
       } else {
-        ctx.fillStyle = 'rgba(18, 24, 15, 0.55)';
-        ctx.font = '800 44px "JetBrains Mono", "Plus Jakarta Sans", sans-serif';
-        ctx.fillText(String(h), rx + 2, ry + 3);
-        ctx.fillStyle = creamInk;
-        ctx.fillText(String(h), rx, ry);
+        drawPadText(ctx, String(h), rx, ry, {
+          role: 'condensed',
+          weight: 700,
+          size: 46,
+          color: creamInk,
+          halo: 'dark',
+          inkStroke: 0.5,
+        });
       }
     }
 
@@ -593,20 +634,24 @@ export function createDialTexture(
       }
 
       // Subdial numerals
-      ctx.fillStyle = creamInk;
-      ctx.font = '700 17px "JetBrains Mono", monospace';
       sub.labels.forEach((lbl) => {
         const a = (lbl.idx / lbl.n) * Math.PI * 2 - Math.PI / 2;
-        ctx.fillText(
+        drawPadText(
+          ctx,
           lbl.val,
           sub.x + Math.cos(a) * (sr - 34),
-          sub.y + Math.sin(a) * (sr - 34)
+          sub.y + Math.sin(a) * (sr - 34),
+          { role: 'condensed', weight: 600, size: 18, color: creamInk, halo: 'dark' }
         );
       });
 
-      ctx.fillStyle = '#E0543E';
-      ctx.font = '700 11px "JetBrains Mono", monospace';
-      ctx.fillText(sub.title, sub.x, sub.y + 24);
+      drawPadText(ctx, sub.title, sub.x, sub.y + 24, {
+        role: 'condensed',
+        weight: 600,
+        size: 13,
+        color: '#E0543E',
+        tracking: 1.4,
+      });
       ctx.restore();
     });
 
@@ -625,17 +670,31 @@ export function createDialTexture(
     ctx.arc(0, ry, 6.5, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = creamInk;
-    ctx.font = '800 32px "JetBrains Mono", "Plus Jakarta Sans", sans-serif';
-    ctx.fillText('A V I - 8', 0, -118);
-
-    ctx.fillStyle = bronzeRim;
-    ctx.font = '700 16px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SPITFIRE LOCK', 0, -88);
-
-    ctx.fillStyle = softCream;
-    ctx.font = '600 12px "JetBrains Mono", monospace';
-    ctx.fillText('CHRONOGRAPH · 5 ATM', 0, 126);
+    drawPadText(ctx, 'AVI-8', 0, -118, {
+      role: 'condensed',
+      weight: 700,
+      size: 34,
+      color: creamInk,
+      tracking: 6.5,
+      finish: dial.lightText ? 'silver' : 'dark-metallic',
+      halo: dial.lightText ? 'dark' : 'none',
+    });
+    drawPadText(ctx, 'SPITFIRE LOCK', 0, -86, {
+      role: 'sans',
+      weight: 700,
+      size: 14,
+      color: bronzeRim,
+      tracking: 3.4,
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'CHRONOGRAPH · 5 ATM', 0, 126, {
+      role: 'condensed',
+      weight: 600,
+      size: 13,
+      color: softCream,
+      tracking: 2.2,
+      halo: 'dark',
+    });
 
     // Deeply Recessed "Tunnel" Date Window at 6 o'clock
     const dy = radius * 0.56;
@@ -652,20 +711,24 @@ export function createDialTexture(
     ctx.roundRect(-34, dy - 22, 68, 44, 6);
     ctx.fill();
 
-    ctx.fillStyle = creamInk;
-    ctx.font = '700 32px "JetBrains Mono", monospace';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), 0, dy + 1);
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), 0, dy + 1, {
+      role: 'mono',
+      weight: 700,
+      size: 31,
+      color: creamInk,
+    });
 
-    ctx.fillStyle = softCream;
-    ctx.font = '600 11px "JetBrains Mono", monospace';
-    ctx.fillText('HAWKER   SPITFIRE', 0, radius * 0.745);
+    drawArcPadText(ctx, 'HAWKER SPITFIRE', 0, 0, radius * 0.76, Math.PI, {
+      role: 'condensed',
+      weight: 600,
+      size: 12,
+      color: softCream,
+      tracking: 3.4,
+      bottomArc: true,
+    });
     ctx.restore();
 
-    const avi8Tex = new THREE.CanvasTexture(canvas);
-    avi8Tex.colorSpace = THREE.SRGBColorSpace;
-    avi8Tex.anisotropy = maxAnisotropy;
-    avi8Tex.needsUpdate = true;
-    return avi8Tex;
+    return finishTex();
   }
 
   if (watch.id === 'omega-speedmaster') {
@@ -678,18 +741,39 @@ export function createDialTexture(
     ctx.arc(0, 0, radius * 0.72, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = ink;
-    ctx.font = '700 32px Georgia, serif';
-    ctx.fillText('Ω', 0, -190);
-    ctx.font = '600 26px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('O M E G A', 0, -148);
-    ctx.font = '500 18px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('Speedmaster', 0, -116);
-    ctx.fillStyle = mutedInk;
-    ctx.font = '600 13px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('PROFESSIONAL', 0, -92);
+    drawPadText(ctx, 'Ω', 0, -190, {
+      role: 'engraved',
+      weight: 700,
+      size: 36,
+      color: ink,
+      finish: dial.lightText ? 'silver' : 'dark-metallic',
+    });
+    drawPadText(ctx, 'OMEGA', 0, -148, {
+      role: 'sans',
+      weight: 600,
+      size: 25,
+      color: ink,
+      tracking: 6.2,
+      finish: dial.lightText ? 'silver' : 'dark-metallic',
+      inkStroke: 0.35,
+    });
+    drawPadText(ctx, 'Speedmaster', 0, -114, {
+      role: 'serif',
+      weight: 600,
+      size: 24,
+      italic: true,
+      color: ink,
+      tracking: 0.8,
+      halo: dial.lightText ? 'dark' : 'none',
+    });
+    drawPadText(ctx, 'PROFESSIONAL', 0, -88, {
+      role: 'condensed',
+      weight: 600,
+      size: 13.5,
+      color: mutedInk,
+      tracking: 3.2,
+      inkStroke: 0.25,
+    });
 
     const speedySubs = [
       { x: 168, y: 12, ticks: [10, 20, 30], tickN: 30 },
@@ -716,25 +800,29 @@ export function createDialTexture(
         ctx.lineTo(sub.x + Math.cos(ta) * (sr - 8), sub.y + Math.sin(ta) * (sr - 8));
         ctx.stroke();
       }
-      ctx.fillStyle = ink;
-      ctx.font = '600 17px "JetBrains Mono", monospace';
       sub.ticks.forEach((num, idx) => {
         const a = ((idx + 1) / sub.ticks.length) * Math.PI * 2 - Math.PI / 2;
-        ctx.fillText(String(num), sub.x + Math.cos(a) * (sr - 34), sub.y + Math.sin(a) * (sr - 34));
+        drawPadText(ctx, String(num), sub.x + Math.cos(a) * (sr - 34), sub.y + Math.sin(a) * (sr - 34), {
+          role: 'condensed',
+          weight: 600,
+          size: 18,
+          color: ink,
+        });
       });
       ctx.restore();
     });
 
-    ctx.fillStyle = mutedInk;
-    ctx.font = '500 13px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SWISS   MADE', 0, radius * 0.84);
+    drawArcPadText(ctx, 'SWISS MADE', 0, 0, radius * 0.855, Math.PI, {
+      role: 'sans',
+      weight: 600,
+      size: 12,
+      color: mutedInk,
+      tracking: 3.4,
+      bottomArc: true,
+    });
     ctx.restore();
 
-    const spTex = new THREE.CanvasTexture(canvas);
-    spTex.colorSpace = THREE.SRGBColorSpace;
-    spTex.anisotropy = maxAnisotropy;
-    spTex.needsUpdate = true;
-    return spTex;
+    return finishTex();
   }
 
   if (watch.id === 'ap-royal-oak') {
@@ -765,18 +853,52 @@ export function createDialTexture(
       ctx.stroke();
     }
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#E5E8EC';
-    ctx.font = '700 28px Georgia, serif';
-    ctx.fillText('AP', 0, -182);
-    ctx.fillStyle = ink;
-    ctx.font = '600 20px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('AUDEMARS PIGUET', 0, -138);
-    ctx.fillStyle = mutedInk;
-    ctx.font = '500 14px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('AUTOMATIC', 0, 152);
-    ctx.fillText('SWISS MADE', 0, radius * 0.78);
+    // Authentic Petite Tapisserie smooth signature cartouche behind AUDEMARS PIGUET
+    drawDialCartouche(ctx, 0, -138, 256, 36, dial.baseHex, {
+      radius: 3,
+      borderColor: 'rgba(0,0,0,0.28)',
+      borderWidth: 1.5,
+      opacity: 0.92,
+    });
+    // Authentic Ref. 16202 applied AP monogram at 6 o'clock (or upper register)
+    drawPadText(ctx, 'AP', 0, -182, {
+      role: 'engraved',
+      weight: 700,
+      size: 32,
+      color: '#EEF2F6',
+      tracking: 2.2,
+      finish: 'silver',
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'AUDEMARS PIGUET', 0, -138, {
+      role: 'sans',
+      weight: 600,
+      size: 16.5,
+      color: ink,
+      tracking: 3.0,
+      halo: dial.lightText ? 'dark' : 'none',
+      inkStroke: 0.3,
+    });
+    drawDialCartouche(ctx, 0, 152, 134, 26, dial.baseHex, {
+      radius: 3,
+      opacity: 0.86,
+    });
+    drawPadText(ctx, 'AUTOMATIC', 0, 152, {
+      role: 'sans',
+      weight: 600,
+      size: 12.5,
+      color: mutedInk,
+      tracking: 3.2,
+      halo: dial.lightText ? 'dark' : 'none',
+    });
+    drawPadText(ctx, 'SWISS MADE', 0, radius * 0.785, {
+      role: 'sans',
+      weight: 600,
+      size: 11.5,
+      color: mutedInk,
+      tracking: 3.0,
+      halo: dial.lightText ? 'dark' : 'none',
+    });
 
     // 3 o'clock beveled date window (matching dial color or dark backing)
     const dx = radius * 0.62;
@@ -787,16 +909,16 @@ export function createDialTexture(
     ctx.roundRect(dx - 38, -28, 76, 56, 4);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#F3F4F6';
-    ctx.font = '700 34px "JetBrains Mono", monospace';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2);
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2, {
+      role: 'condensed',
+      weight: 600,
+      size: 36,
+      color: '#F4F6F8',
+      tracking: 1,
+    });
     ctx.restore();
 
-    const roTex = new THREE.CanvasTexture(canvas);
-    roTex.colorSpace = THREE.SRGBColorSpace;
-    roTex.anisotropy = maxAnisotropy;
-    roTex.needsUpdate = true;
-    return roTex;
+    return finishTex();
   }
 
   if (watch.id === 'pp-nautilus') {
@@ -813,16 +935,36 @@ export function createDialTexture(
       ctx.stroke();
     }
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = ink;
-    ctx.font = '600 22px Georgia, serif';
-    ctx.fillText('PATEK PHILIPPE', 0, -142);
-    ctx.fillStyle = mutedInk;
-    ctx.font = '500 15px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('GENEVE', 0, -112);
-    ctx.font = '500 13px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SWISS', 0, radius * 0.78);
+    // Authentic Nautilus flat signature cartouche interrupting horizontal grooves
+    drawDialCartouche(ctx, 0, -128, 250, 62, dial.baseHex, {
+      radius: 4,
+      opacity: 0.93,
+    });
+    drawPadText(ctx, 'PATEK PHILIPPE', 0, -141, {
+      role: 'engraved',
+      weight: 600,
+      size: 20,
+      color: ink,
+      tracking: 2.8,
+      finish: dial.lightText ? 'silver' : 'dark-metallic',
+      halo: dial.lightText ? 'dark' : 'none',
+    });
+    drawPadText(ctx, 'GENÈVE', 0, -112, {
+      role: 'engraved',
+      weight: 500,
+      size: 13.5,
+      color: mutedInk,
+      tracking: 4.0,
+      halo: dial.lightText ? 'dark' : 'none',
+    });
+    drawPadText(ctx, 'SWISS', 0, radius * 0.785, {
+      role: 'sans',
+      weight: 600,
+      size: 11.5,
+      color: mutedInk,
+      tracking: 3.4,
+      halo: dial.lightText ? 'dark' : 'none',
+    });
 
     const dx = radius * 0.62;
     ctx.fillStyle = '#F6F5F0';
@@ -832,16 +974,16 @@ export function createDialTexture(
     ctx.roundRect(dx - 38, -28, 76, 56, 4);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#121518';
-    ctx.font = '700 34px "JetBrains Mono", monospace';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2);
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2, {
+      role: 'condensed',
+      weight: 600,
+      size: 36,
+      color: '#121518',
+      tracking: 0.8,
+    });
     ctx.restore();
 
-    const ppTex = new THREE.CanvasTexture(canvas);
-    ppTex.colorSpace = THREE.SRGBColorSpace;
-    ppTex.anisotropy = maxAnisotropy;
-    ppTex.needsUpdate = true;
-    return ppTex;
+    return finishTex();
   }
 
   if (watch.id === 'cartier-santos') {
@@ -886,31 +1028,46 @@ export function createDialTexture(
       ctx.save();
       ctx.translate(rx, ry);
       ctx.rotate(a + Math.PI / 2);
-      ctx.font = '700 48px Georgia, serif';
+      ctx.font = horoFont('engraved', 700, 48);
       ctx.fillText(rom, 0, 0);
       if (rom === 'VII') {
         // Cartier secret micro-signature in VII stroke (visible under 2.5x Loupe)
-        ctx.fillStyle = '#14171A';
-        ctx.font = '700 7px "Plus Jakarta Sans", Arial, sans-serif';
-        ctx.fillText('CARTIER', -6, -16);
+        drawPadText(ctx, 'CARTIER', -6, -16, {
+          role: 'sans',
+          weight: 700,
+          size: 7.5,
+          color: '#14171A',
+          tracking: 0.6,
+        });
       }
       ctx.restore();
     });
 
-    ctx.fillStyle = '#14171A';
-    ctx.font = '700 28px Georgia, serif';
-    ctx.fillText('C A R T I E R', 0, -124);
-    ctx.font = '500 14px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('AUTOMATIC', 0, 128);
-    ctx.font = '500 11px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SWISS   MADE', 0, radius * 0.85);
+    drawPadText(ctx, 'CARTIER', 0, -124, {
+      role: 'engraved',
+      weight: 700,
+      size: 27,
+      color: '#14171A',
+      tracking: 6.4,
+      inkStroke: 0.35,
+    });
+    drawPadText(ctx, 'AUTOMATIC', 0, 128, {
+      role: 'sans',
+      weight: 600,
+      size: 13,
+      color: '#2B2F36',
+      tracking: 3.4,
+    });
+    drawPadText(ctx, 'SWISS MADE', 0, radius * 0.855, {
+      role: 'sans',
+      weight: 600,
+      size: 11,
+      color: '#2B2F36',
+      tracking: 3.2,
+    });
     ctx.restore();
 
-    const sTex = new THREE.CanvasTexture(canvas);
-    sTex.colorSpace = THREE.SRGBColorSpace;
-    sTex.anisotropy = maxAnisotropy;
-    sTex.needsUpdate = true;
-    return sTex;
+    return finishTex();
   }
 
   if (watch.id === 'jlc-reverso') {
@@ -956,22 +1113,32 @@ export function createDialTexture(
       ctx.stroke();
     }
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = ink;
-    ctx.font = '600 22px Georgia, serif';
-    ctx.fillText('JAEGER-LECOULTRE', 0, -rh * 0.44);
-    ctx.fillStyle = mutedInk;
-    ctx.font = '500 13px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('REVERSO', 0, -rh * 0.32);
-    ctx.fillText('SWISS MADE', 0, rh * 0.94);
+    drawPadText(ctx, 'JAEGER-LECOULTRE', 0, -rh * 0.44, {
+      role: 'engraved',
+      weight: 600,
+      size: 18.5,
+      color: ink,
+      tracking: 2.2,
+      finish: dial.lightText ? 'silver' : 'dark-metallic',
+      halo: dial.lightText ? 'dark' : 'none',
+    });
+    drawPadText(ctx, 'REVERSO', 0, -rh * 0.32, {
+      role: 'sans',
+      weight: 600,
+      size: 12,
+      color: mutedInk,
+      tracking: 3.8,
+    });
+    drawPadText(ctx, 'SWISS MADE', 0, rh * 0.94, {
+      role: 'sans',
+      weight: 600,
+      size: 10.5,
+      color: mutedInk,
+      tracking: 2.8,
+    });
     ctx.restore();
 
-    const revTex = new THREE.CanvasTexture(canvas);
-    revTex.colorSpace = THREE.SRGBColorSpace;
-    revTex.anisotropy = maxAnisotropy;
-    revTex.needsUpdate = true;
-    return revTex;
+    return finishTex();
   }
 
   if (watch.id === 'gs-snowflake') {
@@ -988,16 +1155,31 @@ export function createDialTexture(
       ctx.stroke();
     }
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = ink;
-    ctx.font = '700 38px Georgia, serif';
-    ctx.fillText('GS', 0, -172);
-    ctx.font = '600 25px Georgia, serif';
-    ctx.fillText('Grand Seiko', 0, -130);
-    ctx.fillStyle = mutedInk;
-    ctx.font = '600 15px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SPRING DRIVE', 0, 126);
+    drawPadText(ctx, 'GS', 0, -172, {
+      role: 'serif',
+      weight: 700,
+      size: 46,
+      color: ink,
+      tracking: 2.4,
+      finish: dial.lightText ? 'silver' : 'dark-metallic',
+      halo: dial.lightText ? 'dark' : 'light',
+    });
+    drawPadText(ctx, 'Grand Seiko', 0, -128, {
+      role: 'serif',
+      weight: 600,
+      size: 29,
+      color: ink,
+      tracking: 1.0,
+      halo: dial.lightText ? 'dark' : 'light',
+    });
+    drawPadText(ctx, 'SPRING DRIVE', 0, 126, {
+      role: 'sans',
+      weight: 600,
+      size: 14,
+      color: mutedInk,
+      tracking: 3.4,
+      halo: dial.lightText ? 'dark' : 'light',
+    });
 
     // 7-8 o'clock recessed fan Power-Reserve scale
     const prx = -146;
@@ -1032,20 +1214,24 @@ export function createDialTexture(
     ctx.roundRect(dx - 40, -28, 80, 56, 4);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#14171A';
-    ctx.font = '700 36px "JetBrains Mono", monospace';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2);
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2, {
+      role: 'condensed',
+      weight: 600,
+      size: 38,
+      color: '#14171A',
+    });
 
-    ctx.fillStyle = mutedInk;
-    ctx.font = '500 11px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('MADE IN JAPAN', 0, radius * 0.85);
+    drawArcPadText(ctx, 'MADE IN JAPAN', 0, 0, radius * 0.855, Math.PI, {
+      role: 'sans',
+      weight: 600,
+      size: 11,
+      color: mutedInk,
+      tracking: 3.0,
+      bottomArc: true,
+    });
     ctx.restore();
 
-    const gsTex = new THREE.CanvasTexture(canvas);
-    gsTex.colorSpace = THREE.SRGBColorSpace;
-    gsTex.anisotropy = maxAnisotropy;
-    gsTex.needsUpdate = true;
-    return gsTex;
+    return finishTex();
   }
 
   if (watch.id === 'lange-1') {
@@ -1079,16 +1265,26 @@ export function createDialTexture(
     ctx.fillStyle = ink;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = '700 22px Georgia, serif';
+    ctx.font = horoFont('engraved', 700, 23);
     langeRomans.forEach((lbl, idx) => {
       const a = (idx / 12) * Math.PI * 2 - Math.PI / 2;
       ctx.fillText(lbl, mx + Math.cos(a) * (mr - 44), my + Math.sin(a) * (mr - 44));
     });
-    ctx.font = '700 18px Georgia, serif';
-    ctx.fillText('A. LANGE & SÖHNE', mx, my - 64);
-    ctx.font = '500 11px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillStyle = mutedInk;
-    ctx.fillText('GLASHÜTTE I/SA', mx, my - 42);
+    drawPadText(ctx, 'A. LANGE & SÖHNE', mx, my - 64, {
+      role: 'engraved',
+      weight: 700,
+      size: 16.5,
+      color: ink,
+      tracking: 1.6,
+      inkStroke: 0.25,
+    });
+    drawPadText(ctx, 'GLASHÜTTE I/SA', mx, my - 42, {
+      role: 'sans',
+      weight: 600,
+      size: 10.5,
+      color: mutedInk,
+      tracking: 2.2,
+    });
 
     // Outsize Twin-Window Big Date at Upper Right (1:30)
     const dayStr = String(dateOverride?.dayNum ?? new Date().getDate()).padStart(2, '0');
@@ -1101,10 +1297,18 @@ export function createDialTexture(
     ctx.strokeRect(bdx - 68, bdy - 40, 62, 80);
     ctx.fillRect(bdx + 2, bdy - 40, 62, 80);
     ctx.strokeRect(bdx + 2, bdy - 40, 62, 80);
-    ctx.fillStyle = '#14171A';
-    ctx.font = '700 54px "JetBrains Mono", monospace';
-    ctx.fillText(dayStr[0], bdx - 37, bdy + 3);
-    ctx.fillText(dayStr[1], bdx + 33, bdy + 3);
+    drawPadText(ctx, dayStr[0], bdx - 37, bdy + 2, {
+      role: 'condensed',
+      weight: 600,
+      size: 58,
+      color: '#14171A',
+    });
+    drawPadText(ctx, dayStr[1], bdx + 33, bdy + 2, {
+      role: 'condensed',
+      weight: 600,
+      size: 58,
+      color: '#14171A',
+    });
 
     // AUF / AB Power Reserve Indicator at 3 o'clock (240, 12)
     const prx = 246;
@@ -1114,11 +1318,20 @@ export function createDialTexture(
     ctx.beginPath();
     ctx.arc(prx, pry, 82, -Math.PI * 0.42, Math.PI * 0.42);
     ctx.stroke();
-    ctx.fillStyle = ink;
-    ctx.font = '700 15px "JetBrains Mono", monospace';
-    ctx.fillText('AUF', prx + 34, pry - 86);
-    ctx.fillStyle = '#B91C1C';
-    ctx.fillText('AB', prx + 34, pry + 86);
+    drawPadText(ctx, 'AUF', prx + 34, pry - 86, {
+      role: 'condensed',
+      weight: 700,
+      size: 15,
+      color: ink,
+      tracking: 1.6,
+    });
+    drawPadText(ctx, 'AB', prx + 34, pry + 86, {
+      role: 'condensed',
+      weight: 700,
+      size: 15,
+      color: '#B91C1C',
+      tracking: 1.6,
+    });
 
     // Lower-Right Moonphase + Small Seconds Sub-Register Frame (150, 185)
     ctx.strokeStyle = '#C99672';
@@ -1127,16 +1340,17 @@ export function createDialTexture(
     ctx.arc(150, 185, 114, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.fillStyle = mutedInk;
-    ctx.font = '500 12px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('MADE IN GERMANY', 0, radius * 0.88);
+    drawArcPadText(ctx, 'MADE IN GERMANY', 0, 0, radius * 0.885, Math.PI, {
+      role: 'sans',
+      weight: 600,
+      size: 11,
+      color: mutedInk,
+      tracking: 2.8,
+      bottomArc: true,
+    });
     ctx.restore();
 
-    const lTex = new THREE.CanvasTexture(canvas);
-    lTex.colorSpace = THREE.SRGBColorSpace;
-    lTex.anisotropy = maxAnisotropy;
-    lTex.needsUpdate = true;
-    return lTex;
+    return finishTex();
   }
 
   if (watch.id === 'rm-tonneau') {
@@ -1179,14 +1393,23 @@ export function createDialTexture(
       ctx.stroke();
     }
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#F4F2ED';
-    ctx.font = '800 22px "JetBrains Mono", sans-serif';
-    ctx.fillText('RICHARD MILLE', 0, -210);
-    ctx.fillStyle = '#F59E0B';
-    ctx.font = '700 13px "JetBrains Mono", monospace';
-    ctx.fillText('RM 11-03 · TOURBILLON CHRONO', 0, -176);
+    drawPadText(ctx, 'RICHARD MILLE', 0, -210, {
+      role: 'condensed',
+      weight: 700,
+      size: 25,
+      color: '#F8FAFC',
+      tracking: 4.5,
+      finish: 'silver',
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'RM 11-03 · TOURBILLON CHRONO', 0, -176, {
+      role: 'mono',
+      weight: 700,
+      size: 12.5,
+      color: '#F59E0B',
+      tracking: 1.6,
+      halo: 'dark',
+    });
 
     // Skeleton chronograph rings at 9h / 3h / 6h tourbillon aperture
     [
@@ -1199,87 +1422,109 @@ export function createDialTexture(
       ctx.beginPath();
       ctx.arc(sub.x, sub.y, 74, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.fillStyle = '#F59E0B';
-      ctx.font = '700 11px "JetBrains Mono", monospace';
-      ctx.fillText(sub.lbl, sub.x, sub.y + 52);
+      drawPadText(ctx, sub.lbl, sub.x, sub.y + 52, {
+        role: 'condensed',
+        weight: 700,
+        size: 12.5,
+        color: '#F59E0B',
+        tracking: 1.8,
+        halo: 'dark',
+      });
     });
     ctx.restore();
 
-    const rmTex = new THREE.CanvasTexture(canvas);
-    rmTex.colorSpace = THREE.SRGBColorSpace;
-    rmTex.anisotropy = maxAnisotropy;
-    rmTex.needsUpdate = true;
-    return rmTex;
+    return finishTex();
   }
 
   if (watch.id === 'vc-overseas') {
     ctx.save();
     ctx.translate(cx, cy);
-    // Double velvet-blue outer seconds & minute chapter track
-    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
-    ctx.lineWidth = 34;
+
+    // Authentic 4520V stepped velvet outer seconds/minute flange (slightly deeper satin tone)
+    ctx.strokeStyle = dial.lightText ? 'rgba(4, 14, 34, 0.34)' : 'rgba(18, 26, 38, 0.1)';
+    ctx.lineWidth = 42;
     ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.9, 0, Math.PI * 2);
+    ctx.arc(0, 0, radius * 0.905, 0, Math.PI * 2);
     ctx.stroke();
+
+    // Inner & outer concentric chapter hairlines framing the velvet flange
+    ctx.strokeStyle = dial.lightText ? 'rgba(235, 242, 252, 0.28)' : 'rgba(20, 26, 34, 0.25)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.858, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.946, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Crisp 60-division minute/seconds track + outer luminous hour pips
     for (let i = 0; i < 60; i++) {
       const a = (i / 60) * Math.PI * 2 - Math.PI / 2;
       const maj = i % 5 === 0;
-      ctx.strokeStyle = ink;
-      ctx.lineWidth = maj ? 3.2 : 1.5;
+      ctx.strokeStyle = maj ? ink : mutedInk;
+      ctx.lineWidth = maj ? 3.0 : 1.4;
       ctx.beginPath();
-      ctx.moveTo(Math.cos(a) * radius * (maj ? 0.855 : 0.885), Math.sin(a) * radius * (maj ? 0.855 : 0.885));
+      ctx.moveTo(
+        Math.cos(a) * radius * (maj ? 0.865 : 0.892),
+        Math.sin(a) * radius * (maj ? 0.865 : 0.892)
+      );
       ctx.lineTo(Math.cos(a) * radius * 0.94, Math.sin(a) * radius * 0.94);
       ctx.stroke();
     }
 
-    // 12 o'clock Maltese Cross emblem
-    ctx.save();
-    ctx.translate(0, -188);
-    ctx.fillStyle = '#E5E8EC';
-    for (let k = 0; k < 4; k++) {
-      ctx.save();
-      ctx.rotate((k * Math.PI) / 2);
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-9, -22);
-      ctx.lineTo(0, -16);
-      ctx.lineTo(9, -22);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-    }
-    ctx.restore();
+    // Signature typography positioned cleanly beneath the sculpted 3D applied Maltese Cross (y = +0.46 * dialR)
+    drawPadText(ctx, 'VACHERON CONSTANTIN', 0, -130, {
+      role: 'engraved',
+      weight: 600,
+      size: 19,
+      color: ink,
+      tracking: 2.6,
+      finish: dial.lightText ? 'silver' : 'dark-metallic',
+      halo: dial.lightText ? 'dark' : 'none',
+    });
+    drawPadText(ctx, 'GENÈVE', 0, -100, {
+      role: 'engraved',
+      weight: 500,
+      size: 13.5,
+      color: mutedInk,
+      tracking: 4.4,
+    });
+    // Authentic 4520V lower dial stays uncluttered — only curved SWISS MADE framing 6 o'clock
+    drawArcPadText(ctx, 'SWISS MADE', 0, 0, radius * 0.895, Math.PI, {
+      role: 'sans',
+      weight: 600,
+      size: 11,
+      color: mutedInk,
+      tracking: 3.4,
+      bottomArc: true,
+    });
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = ink;
-    ctx.font = '600 22px Georgia, serif';
-    ctx.fillText('VACHERON CONSTANTIN', 0, -138);
-    ctx.fillStyle = mutedInk;
-    ctx.font = '500 15px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('GENEVE', 0, -110);
-    ctx.fillText('AUTOMATIC', 0, 148);
-    ctx.fillText('SWISS MADE', 0, radius * 0.84);
-
-    // 3 o'clock beveled date window
-    const dx = radius * 0.65;
-    ctx.fillStyle = '#F7F6F2';
-    ctx.strokeStyle = '#C9CFD4';
-    ctx.lineWidth = 4;
+    // 3 o'clock color-matched beveled date aperture (deep lacquer navy disc on dark dials)
+    const dx = radius * 0.655;
+    const dateBg = dial.lightText ? '#0A254E' : '#F4F2EC';
+    const dateInk = dial.lightText ? '#F8FAFC' : '#121518';
+    ctx.fillStyle = dateBg;
+    ctx.strokeStyle = '#DCE2E8';
+    ctx.lineWidth = 4.5;
     ctx.beginPath();
-    ctx.roundRect(dx - 38, -28, 76, 56, 4);
+    ctx.roundRect(dx - 37, -27, 74, 54, 4);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#121518';
-    ctx.font = '700 34px "JetBrains Mono", monospace';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2);
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.roundRect(dx - 33, -23, 66, 46, 2);
+    ctx.stroke();
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), dx, 1.5, {
+      role: 'condensed',
+      weight: 600,
+      size: 35,
+      color: dateInk,
+      halo: dial.lightText ? 'dark' : 'none',
+    });
     ctx.restore();
 
-    const vcTex = new THREE.CanvasTexture(canvas);
-    vcTex.colorSpace = THREE.SRGBColorSpace;
-    vcTex.anisotropy = maxAnisotropy;
-    vcTex.needsUpdate = true;
-    return vcTex;
+    return finishTex();
   }
 
   if (watch.id === 'omega-seamaster') {
@@ -1296,23 +1541,64 @@ export function createDialTexture(
       ctx.stroke();
     }
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = ink;
-    ctx.font = '700 30px Georgia, serif';
-    ctx.fillText('Ω', 0, -184);
-    ctx.font = '600 24px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('O M E G A', 0, -146);
-    ctx.fillStyle = '#EF4444';
-    ctx.font = '600 20px Georgia, serif';
-    ctx.fillText('Seamaster', 0, -112);
+    drawPadText(ctx, 'Ω', 0, -184, {
+      role: 'engraved',
+      weight: 700,
+      size: 34,
+      color: ink,
+      finish: dial.lightText ? 'silver' : 'dark-metallic',
+      halo: dial.lightText ? 'dark' : 'none',
+    });
+    drawPadText(ctx, 'OMEGA', 0, -146, {
+      role: 'sans',
+      weight: 600,
+      size: 24,
+      color: ink,
+      tracking: 6.0,
+      finish: dial.lightText ? 'silver' : 'dark-metallic',
+      halo: dial.lightText ? 'dark' : 'none',
+    });
+    drawPadText(ctx, 'Seamaster', 0, -112, {
+      role: 'serif',
+      weight: 700,
+      size: 26,
+      color: '#EF4444',
+      tracking: 0.9,
+      halo: 'dark',
+    });
 
-    ctx.fillStyle = mutedInk;
-    ctx.font = '600 12px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('[ZrO2]', 0, -44);
-    ctx.fillText('CO-AXIAL', 0, 102);
-    ctx.fillText('MASTER CHRONOMETER', 0, 122);
-    ctx.fillText('300m / 1000ft', 0, 144);
+    drawPadText(ctx, '[ZrO2]', 0, -44, {
+      role: 'mono',
+      weight: 600,
+      size: 11.5,
+      color: mutedInk,
+      tracking: 1.4,
+      halo: dial.lightText ? 'dark' : 'none',
+    });
+    drawPadText(ctx, 'CO-AXIAL', 0, 102, {
+      role: 'condensed',
+      weight: 600,
+      size: 13.5,
+      color: mutedInk,
+      tracking: 2.8,
+      halo: dial.lightText ? 'dark' : 'none',
+    });
+    drawPadText(ctx, 'MASTER CHRONOMETER', 0, 122, {
+      role: 'condensed',
+      weight: 600,
+      size: 13,
+      color: mutedInk,
+      tracking: 2.4,
+      halo: dial.lightText ? 'dark' : 'none',
+    });
+    drawPadText(ctx, '300m / 1000ft', 0, 144, {
+      role: 'sans',
+      weight: 600,
+      size: 13.5,
+      color: ink,
+      tracking: 1.6,
+      halo: dial.lightText ? 'dark' : 'none',
+    });
 
     // 6 o'clock trapezoidal date aperture
     const dy = radius * 0.72;
@@ -1327,20 +1613,24 @@ export function createDialTexture(
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#F3F4F6';
-    ctx.font = '700 32px "JetBrains Mono", monospace';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), 0, dy + 1);
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), 0, dy + 1, {
+      role: 'condensed',
+      weight: 600,
+      size: 34,
+      color: '#F3F4F6',
+    });
 
-    ctx.fillStyle = mutedInk;
-    ctx.font = '500 12px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SWISS   MADE', 0, radius * 0.87);
+    drawArcPadText(ctx, 'SWISS MADE', 0, 0, radius * 0.875, Math.PI, {
+      role: 'sans',
+      weight: 600,
+      size: 11.5,
+      color: mutedInk,
+      tracking: 3.0,
+      bottomArc: true,
+    });
     ctx.restore();
 
-    const smTex = new THREE.CanvasTexture(canvas);
-    smTex.colorSpace = THREE.SRGBColorSpace;
-    smTex.anisotropy = maxAnisotropy;
-    smTex.needsUpdate = true;
-    return smTex;
+    return finishTex();
   }
 
   if (watch.id === 'tudor-bb58') {
@@ -1376,29 +1666,59 @@ export function createDialTexture(
     ctx.closePath();
     ctx.fill();
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = gilt;
-    ctx.font = '700 26px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('T U D O R', 0, -142);
-    ctx.font = '500 15px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('GENEVE', 0, -114);
+    drawPadText(ctx, 'TUDOR', 0, -142, {
+      role: 'sans',
+      weight: 700,
+      size: 26,
+      color: gilt,
+      tracking: 6.4,
+      finish: 'gilt',
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'GENÈVE', 0, -112, {
+      role: 'engraved',
+      weight: 500,
+      size: 14,
+      color: gilt,
+      tracking: 4.0,
+      finish: 'gilt',
+    });
 
-    ctx.fillStyle = gilt;
-    ctx.font = '600 18px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('200m : 660ft', 0, 120);
-    ctx.font = '500 13px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('CHRONOMETER', 0, 146);
-    ctx.fillText('OFFICIALLY CERTIFIED', 0, 166);
-    ctx.font = '500 12px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SWISS   MADE', 0, radius * 0.84);
+    drawPadText(ctx, '200m : 660ft', 0, 118, {
+      role: 'sans',
+      weight: 600,
+      size: 17,
+      color: gilt,
+      tracking: 1.8,
+      finish: 'gilt',
+    });
+    drawPadText(ctx, 'CHRONOMETER', 0, 146, {
+      role: 'condensed',
+      weight: 600,
+      size: 13.5,
+      color: gilt,
+      tracking: 2.8,
+      finish: 'gilt',
+    });
+    drawPadText(ctx, 'OFFICIALLY CERTIFIED', 0, 166, {
+      role: 'condensed',
+      weight: 600,
+      size: 13,
+      color: gilt,
+      tracking: 2.4,
+      finish: 'gilt',
+    });
+    drawArcPadText(ctx, 'SWISS MADE', 0, 0, radius * 0.855, Math.PI, {
+      role: 'sans',
+      weight: 600,
+      size: 11.5,
+      color: gilt,
+      tracking: 3.2,
+      bottomArc: true,
+    });
     ctx.restore();
 
-    const tdTex = new THREE.CanvasTexture(canvas);
-    tdTex.colorSpace = THREE.SRGBColorSpace;
-    tdTex.anisotropy = maxAnisotropy;
-    tdTex.needsUpdate = true;
-    return tdTex;
+    return finishTex();
   }
 
   if (watch.id === 'panerai-luminor') {
@@ -1415,12 +1735,15 @@ export function createDialTexture(
       const hx = Math.cos(a) * rr;
       const hy = Math.sin(a) * rr;
       if (h === 12 || h === 6) {
-        ctx.fillStyle = 'rgba(0,0,0,0.8)';
-        ctx.font = '800 72px "Plus Jakarta Sans", Arial, sans-serif';
-        ctx.fillText(String(h), hx, hy + 2);
-        ctx.fillStyle = panLume;
-        ctx.font = '800 66px "Plus Jakarta Sans", Arial, sans-serif';
-        ctx.fillText(String(h), hx, hy);
+        drawPadText(ctx, String(h), hx, hy, {
+          role: 'condensed',
+          weight: 700,
+          size: 72,
+          color: panLume,
+          tracking: 2,
+          halo: 'dark',
+          inkStroke: 1.0,
+        });
       } else {
         ctx.save();
         ctx.translate(hx, hy);
@@ -1463,27 +1786,47 @@ export function createDialTexture(
     ctx.roundRect(dx - 38, -28, 76, 56, 6);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = panLume;
-    ctx.font = '700 34px "JetBrains Mono", monospace';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2);
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2, {
+      role: 'condensed',
+      weight: 600,
+      size: 36,
+      color: panLume,
+    });
 
-    ctx.fillStyle = ink;
-    ctx.font = '700 22px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('L U M I N O R', 0, -148);
-    ctx.font = '800 26px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('P A N E R A I', 0, -116);
-    ctx.fillStyle = mutedInk;
-    ctx.font = '600 18px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('MARINA', 0, 134);
-    ctx.font = '500 13px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('AUTOMATIC · 300M', 0, 162);
+    drawPadText(ctx, 'LUMINOR', 0, -148, {
+      role: 'condensed',
+      weight: 600,
+      size: 24,
+      color: ink,
+      tracking: 6.0,
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'PANERAI', 0, -114, {
+      role: 'condensed',
+      weight: 700,
+      size: 29,
+      color: ink,
+      tracking: 7.0,
+      finish: dial.lightText ? 'silver' : 'dark-metallic',
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'MARINA', 0, 134, {
+      role: 'condensed',
+      weight: 600,
+      size: 19,
+      color: mutedInk,
+      tracking: 5.0,
+    });
+    drawPadText(ctx, 'AUTOMATIC · 300M', 0, 162, {
+      role: 'sans',
+      weight: 600,
+      size: 12.5,
+      color: mutedInk,
+      tracking: 2.6,
+    });
     ctx.restore();
 
-    const panTex = new THREE.CanvasTexture(canvas);
-    panTex.colorSpace = THREE.SRGBColorSpace;
-    panTex.anisotropy = maxAnisotropy;
-    panTex.needsUpdate = true;
-    return panTex;
+    return finishTex();
   }
 
   if (watch.id === 'tag-monaco') {
@@ -1542,11 +1885,13 @@ export function createDialTexture(
         ctx.lineTo(sub.x + Math.cos(ta) * 60, sub.y + Math.sin(ta) * 60);
         ctx.stroke();
       }
-      ctx.fillStyle = '#181C20';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = '700 13px "JetBrains Mono", monospace';
-      ctx.fillText(sub.lbl, sub.x, sub.y + 34);
+      drawPadText(ctx, sub.lbl, sub.x, sub.y + 34, {
+        role: 'condensed',
+        weight: 700,
+        size: 13.5,
+        color: '#181C20',
+        tracking: 1.8,
+      });
     });
 
     // Classic Heuer shield + MONACO badge
@@ -1559,18 +1904,30 @@ export function createDialTexture(
     ctx.lineTo(-22, -178);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = '#14171A';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = '800 12px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('HEUER', 0, -190);
+    drawPadText(ctx, 'HEUER', 0, -190, {
+      role: 'condensed',
+      weight: 700,
+      size: 13,
+      color: '#14171A',
+      tracking: 1.0,
+    });
 
-    ctx.fillStyle = ink;
-    ctx.font = '700 20px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('MONACO', 0, -134);
-    ctx.fillStyle = mutedInk;
-    ctx.font = '600 12px "JetBrains Mono", monospace';
-    ctx.fillText('CALIBRE 11 · AUTOMATIC', 0, 128);
+    drawPadText(ctx, 'MONACO', 0, -134, {
+      role: 'condensed',
+      weight: 700,
+      size: 24,
+      color: ink,
+      tracking: 4.4,
+      finish: dial.lightText ? 'silver' : 'dark-metallic',
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'CALIBRE 11 · AUTOMATIC', 0, 128, {
+      role: 'condensed',
+      weight: 600,
+      size: 13,
+      color: mutedInk,
+      tracking: 2.2,
+    });
 
     // 6 o'clock Date Window
     const dy = radius * 0.56;
@@ -1581,16 +1938,15 @@ export function createDialTexture(
     ctx.roundRect(-34, dy - 24, 68, 48, 4);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#111827';
-    ctx.font = '700 30px "JetBrains Mono", monospace';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), 0, dy + 1);
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), 0, dy + 1, {
+      role: 'condensed',
+      weight: 700,
+      size: 32,
+      color: '#111827',
+    });
     ctx.restore();
 
-    const tagTex = new THREE.CanvasTexture(canvas);
-    tagTex.colorSpace = THREE.SRGBColorSpace;
-    tagTex.anisotropy = maxAnisotropy;
-    tagTex.needsUpdate = true;
-    return tagTex;
+    return finishTex();
   }
 
   if (watch.id === 'breitling-navitimer') {
@@ -1629,9 +1985,12 @@ export function createDialTexture(
       const a = (idx / slideNums.length) * Math.PI * 2 - Math.PI / 2;
       ctx.save();
       ctx.rotate(a + Math.PI / 2);
-      ctx.fillStyle = lbl === '10' || lbl === '60' ? '#B91C1C' : '#181B20';
-      ctx.font = '700 18px "JetBrains Mono", monospace';
-      ctx.fillText(lbl, 0, -radius * 0.925);
+      drawPadText(ctx, lbl, 0, -radius * 0.925, {
+        role: 'condensed',
+        weight: 700,
+        size: 19,
+        color: lbl === '10' || lbl === '60' ? '#B91C1C' : '#181B20',
+      });
       ctx.restore();
     });
 
@@ -1660,38 +2019,57 @@ export function createDialTexture(
         ctx.lineTo(sub.x + Math.cos(ta) * (sr - 6), sub.y + Math.sin(ta) * (sr - 6));
         ctx.stroke();
       }
-      ctx.fillStyle = '#14171A';
-      ctx.font = '700 15px "JetBrains Mono", monospace';
       sub.ticks.forEach((num, idx) => {
         const a = ((idx + 1) / sub.ticks.length) * Math.PI * 2 - Math.PI / 2;
-        ctx.fillText(String(num), sub.x + Math.cos(a) * (sr - 30), sub.y + Math.sin(a) * (sr - 30));
+        drawPadText(ctx, String(num), sub.x + Math.cos(a) * (sr - 30), sub.y + Math.sin(a) * (sr - 30), {
+          role: 'condensed',
+          weight: 700,
+          size: 16,
+          color: '#14171A',
+        });
       });
       if (sIdx === 2) {
         ctx.fillStyle = '#111827';
         ctx.fillRect(sub.x - 24, sub.y + 30, 48, 34);
-        ctx.fillStyle = '#F9FAFB';
-        ctx.font = '700 22px "JetBrains Mono", monospace';
-        ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), sub.x, sub.y + 48);
+        drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), sub.x, sub.y + 48, {
+          role: 'condensed',
+          weight: 600,
+          size: 24,
+          color: '#F9FAFB',
+        });
       }
       ctx.restore();
     });
 
-    ctx.fillStyle = '#D4AF37';
-    ctx.font = '700 26px Georgia, serif';
-    ctx.fillText('B', 0, -172);
-    ctx.fillStyle = '#F3F1EA';
-    ctx.font = '700 20px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('BREITLING', 0, -138);
-    ctx.fillStyle = '#D4AF37';
-    ctx.font = '600 14px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('NAVITIMER', 0, -112);
+    drawPadText(ctx, 'B', 0, -172, {
+      role: 'serif',
+      weight: 700,
+      size: 36,
+      italic: true,
+      color: '#D4AF37',
+      finish: 'gold',
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'BREITLING', 0, -136, {
+      role: 'sans',
+      weight: 700,
+      size: 19,
+      color: '#F3F1EA',
+      tracking: 4.4,
+      finish: 'silver',
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'NAVITIMER', 0, -110, {
+      role: 'condensed',
+      weight: 600,
+      size: 14.5,
+      color: '#E2BD6B',
+      tracking: 3.2,
+      finish: 'gilt',
+    });
     ctx.restore();
 
-    const navTex = new THREE.CanvasTexture(canvas);
-    navTex.colorSpace = THREE.SRGBColorSpace;
-    navTex.anisotropy = maxAnisotropy;
-    navTex.needsUpdate = true;
-    return navTex;
+    return finishTex();
   }
 
   if (watch.id === 'zenith-el-primero') {
@@ -1735,28 +2113,41 @@ export function createDialTexture(
         ctx.lineTo(sub.x + Math.cos(ta) * (sr - 5), sub.y + Math.sin(ta) * (sr - 5));
         ctx.stroke();
       }
-      ctx.fillStyle = sub.fg;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = '700 16px "JetBrains Mono", monospace';
       sub.ticks.forEach((num, idx) => {
         const a = ((idx + 1) / sub.ticks.length) * Math.PI * 2 - Math.PI / 2;
-        ctx.fillText(String(num), sub.x + Math.cos(a) * (sr - 33), sub.y + Math.sin(a) * (sr - 33));
+        drawPadText(ctx, String(num), sub.x + Math.cos(a) * (sr - 33), sub.y + Math.sin(a) * (sr - 33), {
+          role: 'condensed',
+          weight: 700,
+          size: 17,
+          color: sub.fg,
+        });
       });
       ctx.restore();
     });
 
     // Zenith 5-point Star & Branding
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#14171A';
-    ctx.font = '700 28px Georgia, serif';
-    ctx.fillText('★', 0, -196);
-    ctx.font = '700 24px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('Z E N I T H', 0, -152);
-    ctx.fillStyle = '#DC2626';
-    ctx.font = '700 13px "JetBrains Mono", monospace';
-    ctx.fillText('EL PRIMERO · 36,000 VpH', 0, -122);
+    drawPadText(ctx, '★', 0, -196, {
+      role: 'engraved',
+      weight: 700,
+      size: 28,
+      color: '#14171A',
+      finish: 'dark-metallic',
+    });
+    drawPadText(ctx, 'ZENITH', 0, -152, {
+      role: 'sans',
+      weight: 700,
+      size: 23,
+      color: '#14171A',
+      tracking: 6.2,
+      inkStroke: 0.3,
+    });
+    drawPadText(ctx, 'EL PRIMERO · 36,000 VpH', 0, -122, {
+      role: 'condensed',
+      weight: 700,
+      size: 13.5,
+      color: '#DC2626',
+      tracking: 1.8,
+    });
 
     // 4:30 Trapezoid Date Window
     ctx.save();
@@ -1767,21 +2158,25 @@ export function createDialTexture(
     ctx.lineWidth = 3;
     ctx.fillRect(-26, -22, 52, 44);
     ctx.strokeRect(-26, -22, 52, 44);
-    ctx.fillStyle = '#111827';
-    ctx.font = '700 26px "JetBrains Mono", monospace';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), 0, 1);
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), 0, 1, {
+      role: 'condensed',
+      weight: 700,
+      size: 28,
+      color: '#111827',
+    });
     ctx.restore();
 
-    ctx.fillStyle = mutedInk;
-    ctx.font = '500 12px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SWISS MADE', 0, radius * 0.87);
+    drawArcPadText(ctx, 'SWISS MADE', 0, 0, radius * 0.875, Math.PI, {
+      role: 'sans',
+      weight: 600,
+      size: 11.5,
+      color: mutedInk,
+      tracking: 3.0,
+      bottomArc: true,
+    });
     ctx.restore();
 
-    const zenTex = new THREE.CanvasTexture(canvas);
-    zenTex.colorSpace = THREE.SRGBColorSpace;
-    zenTex.anisotropy = maxAnisotropy;
-    zenTex.needsUpdate = true;
-    return zenTex;
+    return finishTex();
   }
 
   if (watch.id === 'iwc-big-pilot') {
@@ -1813,14 +2208,16 @@ export function createDialTexture(
     });
 
     // Crisp luminous cockpit Arabic numerals
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#EDF2E8';
-    ctx.font = '700 46px "Plus Jakarta Sans", Arial, sans-serif';
     for (let h = 1; h <= 11; h++) {
       if (h === 3 || h === 6) continue;
       const a = (h / 12) * Math.PI * 2 - Math.PI / 2;
-      ctx.fillText(String(h), Math.cos(a) * radius * 0.69, Math.sin(a) * radius * 0.69);
+      drawPadText(ctx, String(h), Math.cos(a) * radius * 0.69, Math.sin(a) * radius * 0.69, {
+        role: 'condensed',
+        weight: 600,
+        size: 52,
+        color: '#EDF2E8',
+        halo: 'dark',
+      });
     }
 
     // Inner 24-hour UTC track
@@ -1829,11 +2226,14 @@ export function createDialTexture(
     ctx.beginPath();
     ctx.arc(0, 0, radius * 0.44, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.fillStyle = '#EF4444';
-    ctx.font = '700 16px "JetBrains Mono", monospace';
     for (let u = 2; u <= 24; u += 2) {
       const a = (u / 24) * Math.PI * 2 - Math.PI / 2;
-      ctx.fillText(String(u), Math.cos(a) * radius * 0.37, Math.sin(a) * radius * 0.37);
+      drawPadText(ctx, String(u), Math.cos(a) * radius * 0.37, Math.sin(a) * radius * 0.37, {
+        role: 'condensed',
+        weight: 700,
+        size: 17,
+        color: '#EF4444',
+      });
     }
 
     // 3 o'clock Power Reserve Gauge
@@ -1843,9 +2243,13 @@ export function createDialTexture(
     ctx.beginPath();
     ctx.arc(prx, 0, 74, -Math.PI * 0.4, Math.PI * 0.4);
     ctx.stroke();
-    ctx.fillStyle = '#EF4444';
-    ctx.font = '700 13px "JetBrains Mono", monospace';
-    ctx.fillText('7 DAYS', prx + 8, 52);
+    drawPadText(ctx, '7 DAYS', prx + 8, 52, {
+      role: 'condensed',
+      weight: 700,
+      size: 14,
+      color: '#EF4444',
+      tracking: 1.6,
+    });
 
     // 6 o'clock date window
     const dy = radius * 0.66;
@@ -1854,23 +2258,32 @@ export function createDialTexture(
     ctx.lineWidth = 3;
     ctx.fillRect(-34, dy - 24, 68, 48);
     ctx.strokeRect(-34, dy - 24, 68, 48);
-    ctx.fillStyle = '#F3F4F6';
-    ctx.font = '700 32px "JetBrains Mono", monospace';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), 0, dy + 1);
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), 0, dy + 1, {
+      role: 'condensed',
+      weight: 600,
+      size: 34,
+      color: '#F3F4F6',
+    });
 
-    ctx.fillStyle = ink;
-    ctx.font = '700 28px Georgia, serif';
-    ctx.fillText('I W C', 0, -158);
-    ctx.fillStyle = mutedInk;
-    ctx.font = '500 14px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SCHAFFHAUSEN', 0, -126);
+    drawPadText(ctx, 'IWC', 0, -158, {
+      role: 'engraved',
+      weight: 700,
+      size: 31,
+      color: ink,
+      tracking: 6.5,
+      finish: dial.lightText ? 'silver' : 'dark-metallic',
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'SCHAFFHAUSEN', 0, -124, {
+      role: 'sans',
+      weight: 600,
+      size: 12.5,
+      color: mutedInk,
+      tracking: 3.4,
+    });
     ctx.restore();
 
-    const iwcTex = new THREE.CanvasTexture(canvas);
-    iwcTex.colorSpace = THREE.SRGBColorSpace;
-    iwcTex.anisotropy = maxAnisotropy;
-    iwcTex.needsUpdate = true;
-    return iwcTex;
+    return finishTex();
   }
 
   if (watch.id === 'breguet-classique') {
@@ -1903,33 +2316,59 @@ export function createDialTexture(
     }
 
     // Classic calligraphic Breguet Arabic numerals (1–12)
-    ctx.fillStyle = '#15171A';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = 'italic 700 44px Georgia, serif';
     for (let h = 1; h <= 12; h++) {
       if (h === 3) continue;
       const a = (h / 12) * Math.PI * 2 - Math.PI / 2;
-      ctx.fillText(String(h), Math.cos(a) * radius * 0.77, Math.sin(a) * radius * 0.77);
+      drawPadText(ctx, String(h), Math.cos(a) * radius * 0.77, Math.sin(a) * radius * 0.77, {
+        role: 'serif',
+        weight: 700,
+        size: 52,
+        italic: true,
+        color: '#15171A',
+      });
     }
 
     // Cartouche plaque + Secret Breguet signatures flanking 12
-    ctx.fillStyle = '#F1EEE7';
-    ctx.fillRect(-108, -162, 216, 44);
-    ctx.strokeStyle = '#9C9486';
-    ctx.lineWidth = 1.8;
-    ctx.strokeRect(-108, -162, 216, 44);
-    ctx.fillStyle = '#15171A';
-    ctx.font = 'italic 700 32px Georgia, serif';
-    ctx.fillText('Breguet', 0, -140);
+    drawDialCartouche(ctx, 0, -140, 216, 46, '#F1EEE7', {
+      radius: 4,
+      borderColor: '#9C9486',
+      borderWidth: 1.8,
+      opacity: 0.98,
+    });
+    drawPadText(ctx, 'Breguet', 0, -140, {
+      role: 'serif',
+      weight: 700,
+      size: 38,
+      italic: true,
+      color: '#15171A',
+      tracking: 0.8,
+    });
 
-    ctx.fillStyle = 'rgba(21,23,26,0.5)';
-    ctx.font = 'italic 600 10px Georgia, serif';
-    ctx.fillText('Breguet', -58, -radius * 0.63);
-    ctx.fillText('Breguet', 58, -radius * 0.63);
-    ctx.fillStyle = '#4B5563';
-    ctx.font = '600 13px "JetBrains Mono", monospace';
-    ctx.fillText('N° 5177 · SWISS GUILLOCHE', 0, 144);
+    drawPadText(ctx, 'Breguet', -58, -radius * 0.63, {
+      role: 'serif',
+      weight: 600,
+      size: 12,
+      italic: true,
+      color: 'rgba(21,23,26,0.52)',
+    });
+    drawPadText(ctx, 'Breguet', 58, -radius * 0.63, {
+      role: 'serif',
+      weight: 600,
+      size: 12,
+      italic: true,
+      color: 'rgba(21,23,26,0.52)',
+    });
+    drawDialCartouche(ctx, 0, 144, 210, 26, '#F1EEE7', {
+      radius: 3,
+      opacity: 0.92,
+    });
+    drawPadText(ctx, 'N° 5177 · SWISS GUILLOCHÉ', 0, 144, {
+      role: 'engraved',
+      weight: 600,
+      size: 11.5,
+      color: '#374151',
+      tracking: 1.6,
+    });
 
     // 3 o'clock beveled oval date aperture
     const dx = radius * 0.76;
@@ -1940,16 +2379,15 @@ export function createDialTexture(
     ctx.roundRect(dx - 34, -24, 68, 48, 12);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#15171A';
-    ctx.font = '700 32px Georgia, serif';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2);
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2, {
+      role: 'serif',
+      weight: 700,
+      size: 36,
+      color: '#15171A',
+    });
     ctx.restore();
 
-    const brgTex = new THREE.CanvasTexture(canvas);
-    brgTex.colorSpace = THREE.SRGBColorSpace;
-    brgTex.anisotropy = maxAnisotropy;
-    brgTex.needsUpdate = true;
-    return brgTex;
+    return finishTex();
   }
 
   // --- PACK 1: INDEPENDENT & HAUTE HORLOGERIE ---
@@ -1972,13 +2410,18 @@ export function createDialTexture(
     }
 
     // Iconic Journe tilted cream Arabic numerals
-    ctx.fillStyle = '#F7F1E1';
-    ctx.font = 'italic 600 44px Georgia, serif';
     for (let h = 1; h <= 12; h++) {
       if (h === 7 || h === 8) continue;
       const a = (h / 12) * Math.PI * 2 - Math.PI / 2;
       const rNum = radius * 0.74;
-      ctx.fillText(String(h), Math.cos(a) * rNum, Math.sin(a) * rNum);
+      drawPadText(ctx, String(h), Math.cos(a) * rNum, Math.sin(a) * rNum, {
+        role: 'serif',
+        weight: 600,
+        size: 52,
+        italic: true,
+        color: '#F7F1E1',
+        halo: 'dark',
+      });
     }
 
     // Recessed guilloché small seconds at 7:30
@@ -1999,28 +2442,43 @@ export function createDialTexture(
       ctx.arc(sx, sy, r, 0, Math.PI * 2);
       ctx.stroke();
     }
-    ctx.fillStyle = '#F7F1E1';
-    ctx.font = '600 20px Georgia, serif';
     [60, 15, 30, 45].forEach((n, i) => {
       const a = (i / 4) * Math.PI * 2 - Math.PI / 2;
-      ctx.fillText(String(n), sx + Math.cos(a) * (sr - 24), sy + Math.sin(a) * (sr - 24));
+      drawPadText(ctx, String(n), sx + Math.cos(a) * (sr - 24), sy + Math.sin(a) * (sr - 24), {
+        role: 'serif',
+        weight: 700,
+        size: 22,
+        color: '#F7F1E1',
+      });
     });
 
-    ctx.fillStyle = '#F7F1E1';
-    ctx.font = '700 26px Georgia, serif';
-    ctx.fillText('F.P. JOURNE', 0, -148);
-    ctx.font = 'italic 500 15px Georgia, serif';
-    ctx.fillStyle = '#DCE6F5';
-    ctx.fillText('Invenit et Fecit', 0, -118);
-    ctx.font = '600 13px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('CHRONOMÈTRE BLEU', 0, 185);
+    drawPadText(ctx, 'F.P. JOURNE', 0, -148, {
+      role: 'engraved',
+      weight: 700,
+      size: 23,
+      color: '#F7F1E1',
+      tracking: 3.4,
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'Invenit et Fecit', 0, -116, {
+      role: 'serif',
+      weight: 600,
+      size: 21,
+      italic: true,
+      color: '#DCE6F5',
+      tracking: 0.8,
+    });
+    drawPadText(ctx, 'CHRONOMÈTRE BLEU', 0, 185, {
+      role: 'sans',
+      weight: 600,
+      size: 12.5,
+      color: '#E5ECF7',
+      tracking: 3.0,
+      halo: 'dark',
+    });
     ctx.restore();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = maxAnisotropy;
-    tex.needsUpdate = true;
-    return tex;
+    return finishTex();
   }
 
   if (watch.id === 'moser-streamliner') {
@@ -2042,16 +2500,16 @@ export function createDialTexture(
     }
 
     // Minimalist stealth transparent lacquer signature (zero loud text)
-    ctx.fillStyle = 'rgba(255,255,255,0.14)';
-    ctx.font = '600 20px Georgia, serif';
-    ctx.fillText('H. MOSER & CIE', 0, -155);
+    drawPadText(ctx, 'H. MOSER & CIE', 0, -155, {
+      role: 'engraved',
+      weight: 600,
+      size: 18,
+      color: 'rgba(255,255,255,0.19)',
+      tracking: 3.4,
+    });
     ctx.restore();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = maxAnisotropy;
-    tex.needsUpdate = true;
-    return tex;
+    return finishTex();
   }
 
   if (watch.id === 'mbf-lm101') {
@@ -2081,7 +2539,7 @@ export function createDialTexture(
 
     const romans = ['XII', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
     ctx.fillStyle = '#15181C';
-    ctx.font = '700 22px Georgia, serif';
+    ctx.font = horoFont('engraved', 700, 22);
     romans.forEach((r, idx) => {
       const a = (idx / 12) * Math.PI * 2 - Math.PI / 2;
       ctx.fillText(r, tx + Math.cos(a) * (tr - 26), ty + Math.sin(a) * (tr - 26));
@@ -2098,10 +2556,20 @@ export function createDialTexture(
     ctx.strokeStyle = '#C9A857';
     ctx.lineWidth = 5;
     ctx.stroke();
-    ctx.fillStyle = '#15181C';
-    ctx.font = '700 14px "JetBrains Mono", monospace';
-    ctx.fillText('45H', px, py - 34);
-    ctx.fillText('POWER', px, py + 46);
+    drawPadText(ctx, '45H', px, py - 34, {
+      role: 'condensed',
+      weight: 700,
+      size: 15,
+      color: '#15181C',
+      tracking: 1.4,
+    });
+    drawPadText(ctx, 'POWER', px, py + 46, {
+      role: 'sans',
+      weight: 700,
+      size: 11.5,
+      color: '#15181C',
+      tracking: 2.2,
+    });
     // Clean 240° arc from 7:30 (red empty) clockwise over 12:00 to 4:30 (full 45H)
     for (let t = 0; t <= 12; t++) {
       const a = Math.PI * 0.78 + (t / 12) * Math.PI * 1.44;
@@ -2114,19 +2582,24 @@ export function createDialTexture(
     }
 
     // Subtle bridge anchor recess at 9 o'clock & 3 o'clock
-    ctx.fillStyle = '#D4AF37';
-    ctx.font = '700 18px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('MB&F', -radius * 0.44, -radius * 0.46);
-    ctx.fillStyle = '#9CA3AF';
-    ctx.font = '600 12px "JetBrains Mono", monospace';
-    ctx.fillText('LEGACY MACHINE 101', -radius * 0.36, -radius * 0.37);
+    drawPadText(ctx, 'MB&F', -radius * 0.44, -radius * 0.46, {
+      role: 'engraved',
+      weight: 700,
+      size: 20,
+      color: '#D4AF37',
+      tracking: 2.8,
+      finish: 'gold',
+    });
+    drawPadText(ctx, 'LEGACY MACHINE 101', -radius * 0.36, -radius * 0.37, {
+      role: 'condensed',
+      weight: 600,
+      size: 12,
+      color: '#CBD5E1',
+      tracking: 1.8,
+    });
     ctx.restore();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = maxAnisotropy;
-    tex.needsUpdate = true;
-    return tex;
+    return finishTex();
   }
 
   if (watch.id === 'bulgari-octo-finissimo') {
@@ -2139,9 +2612,13 @@ export function createDialTexture(
     for (let h = 0; h < 12; h++) {
       const a = (h / 12) * Math.PI * 2 - Math.PI / 2;
       if (h === 0 || h === 6) {
-        ctx.fillStyle = '#181A1D';
-        ctx.font = '700 46px "Plus Jakarta Sans", Arial, sans-serif';
-        ctx.fillText(h === 0 ? '12' : '6', Math.cos(a) * radius * 0.74, Math.sin(a) * radius * 0.74);
+        drawPadText(ctx, h === 0 ? '12' : '6', Math.cos(a) * radius * 0.74, Math.sin(a) * radius * 0.74, {
+          role: 'sans',
+          weight: 700,
+          size: 48,
+          color: '#181A1D',
+          tracking: 1.5,
+        });
       } else {
         ctx.strokeStyle = '#181A1D';
         ctx.lineWidth = 8;
@@ -2169,18 +2646,24 @@ export function createDialTexture(
       ctx.stroke();
     }
 
-    ctx.fillStyle = '#141619';
-    ctx.font = '700 28px Georgia, serif';
-    ctx.fillText('B V L G A R I', 0, -148);
-    ctx.font = '500 13px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('OCTO FINISSIMO', 0, 178);
+    drawPadText(ctx, 'BVLGARI', 0, -148, {
+      role: 'engraved',
+      weight: 700,
+      size: 27,
+      color: '#141619',
+      tracking: 7.4,
+      inkStroke: 0.35,
+    });
+    drawPadText(ctx, 'OCTO FINISSIMO', 0, 178, {
+      role: 'sans',
+      weight: 600,
+      size: 12.5,
+      color: '#1E2226',
+      tracking: 3.4,
+    });
     ctx.restore();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = maxAnisotropy;
-    tex.needsUpdate = true;
-    return tex;
+    return finishTex();
   }
 
   // --- PACK 2: WORLDTIMERS, FIELD & EXPLORATION ---
@@ -2239,33 +2722,46 @@ export function createDialTexture(
       const a = (idx / 24) * Math.PI * 2 - Math.PI / 2;
       ctx.save();
       ctx.rotate(a + Math.PI / 2);
-      ctx.fillStyle = idx === 0 ? '#B91C1C' : '#181A1E';
-      ctx.font = '700 13px "Plus Jakarta Sans", Arial, sans-serif';
-      ctx.fillText(city, 0, -radius * (idx % 2 === 0 ? 0.86 : 0.76));
+      drawPadText(ctx, city, 0, -radius * (idx % 2 === 0 ? 0.86 : 0.76), {
+        role: 'condensed',
+        weight: 600,
+        size: 13.5,
+        color: idx === 0 ? '#B91C1C' : '#181A1E',
+        tracking: 1.0,
+      });
       ctx.restore();
 
       const h24 = (idx + 12) % 24 || 24;
       ctx.save();
       ctx.rotate(a + Math.PI / 2);
-      ctx.fillStyle = idx < 12 ? '#14171A' : '#F3F4F6';
-      ctx.font = '700 18px "JetBrains Mono", monospace';
-      ctx.fillText(String(h24), 0, -radius * 0.585);
+      drawPadText(ctx, String(h24), 0, -radius * 0.585, {
+        role: 'condensed',
+        weight: 700,
+        size: 18,
+        color: idx < 12 ? '#14171A' : '#F3F4F6',
+      });
       ctx.restore();
     });
 
-    ctx.fillStyle = '#F3EFE6';
-    ctx.font = '700 20px Georgia, serif';
-    ctx.fillText('PATEK PHILIPPE', 0, -92);
-    ctx.font = '500 12px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillStyle = '#CBD5E1';
-    ctx.fillText('GENEVE · WORLD TIME', 0, -68);
+    drawPadText(ctx, 'PATEK PHILIPPE', 0, -92, {
+      role: 'engraved',
+      weight: 700,
+      size: 18,
+      color: '#F3EFE6',
+      tracking: 2.2,
+      finish: 'silver',
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'GENÈVE · WORLD TIME', 0, -68, {
+      role: 'sans',
+      weight: 600,
+      size: 10.5,
+      color: '#CBD5E1',
+      tracking: 2.2,
+    });
     ctx.restore();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = maxAnisotropy;
-    tex.needsUpdate = true;
-    return tex;
+    return finishTex();
   }
 
   if (watch.id === 'longines-zulu-time') {
@@ -2286,22 +2782,44 @@ export function createDialTexture(
     }
 
     // Applied gilt Arabic aviation numerals
-    ctx.fillStyle = '#EAD092';
-    ctx.font = '700 44px "Plus Jakarta Sans", Arial, sans-serif';
     for (let h = 1; h <= 12; h++) {
       if (h === 6) continue;
       const a = (h / 12) * Math.PI * 2 - Math.PI / 2;
-      ctx.fillText(String(h), Math.cos(a) * radius * 0.72, Math.sin(a) * radius * 0.72);
+      drawPadText(ctx, String(h), Math.cos(a) * radius * 0.72, Math.sin(a) * radius * 0.72, {
+        role: 'condensed',
+        weight: 600,
+        size: 46,
+        color: '#EAD092',
+        finish: 'gilt',
+        halo: 'dark',
+      });
     }
 
-    ctx.fillStyle = '#F2EFE6';
-    ctx.font = '700 26px Georgia, serif';
-    ctx.fillText('L O N G I N E S', 0, -148);
-    ctx.fillStyle = '#E2BD6B';
-    ctx.font = '700 14px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('ZULU TIME', 0, 96);
-    ctx.font = '700 18px Georgia, serif';
-    ctx.fillText('★ ★ ★ ★ ★', 0, 132);
+    drawPadText(ctx, 'LONGINES', 0, -148, {
+      role: 'engraved',
+      weight: 700,
+      size: 25,
+      color: '#F2EFE6',
+      tracking: 6.4,
+      finish: 'silver',
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'ZULU TIME', 0, 96, {
+      role: 'condensed',
+      weight: 700,
+      size: 15,
+      color: '#E2BD6B',
+      tracking: 3.4,
+      finish: 'gilt',
+    });
+    drawPadText(ctx, '★★★★★', 0, 132, {
+      role: 'engraved',
+      weight: 700,
+      size: 18,
+      color: '#E2BD6B',
+      tracking: 7,
+      finish: 'gold',
+    });
 
     // 6 o'clock date window
     ctx.fillStyle = '#111316';
@@ -2309,16 +2827,15 @@ export function createDialTexture(
     ctx.lineWidth = 3;
     ctx.fillRect(-30, radius * 0.66 - 24, 60, 48);
     ctx.strokeRect(-30, radius * 0.66 - 24, 60, 48);
-    ctx.fillStyle = '#F5F5F4';
-    ctx.font = '700 30px "JetBrains Mono", monospace';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), 0, radius * 0.66 + 1);
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), 0, radius * 0.66 + 1, {
+      role: 'condensed',
+      weight: 600,
+      size: 32,
+      color: '#F5F5F4',
+    });
     ctx.restore();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = maxAnisotropy;
-    tex.needsUpdate = true;
-    return tex;
+    return finishTex();
   }
 
   if (watch.id === 'hamilton-murph') {
@@ -2346,26 +2863,35 @@ export function createDialTexture(
     }
 
     // Aged radium-tone Arabic numerals (1-12)
-    ctx.fillStyle = '#E8D5A3';
-    ctx.font = '600 46px "Plus Jakarta Sans", Arial, sans-serif';
     for (let h = 1; h <= 12; h++) {
       const a = (h / 12) * Math.PI * 2 - Math.PI / 2;
-      ctx.fillText(String(h), Math.cos(a) * radius * 0.71, Math.sin(a) * radius * 0.71);
+      drawPadText(ctx, String(h), Math.cos(a) * radius * 0.71, Math.sin(a) * radius * 0.71, {
+        role: 'serif',
+        weight: 700,
+        size: 52,
+        color: '#E8D5A3',
+        halo: 'dark',
+      });
     }
 
-    ctx.fillStyle = '#F3EFE4';
-    ctx.font = '700 28px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('HAMILTON', 0, -142);
-    ctx.fillStyle = '#CFC6B0';
-    ctx.font = '600 15px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('KHAKI · AUTOMATIC', 0, 146);
+    drawPadText(ctx, 'HAMILTON', 0, -142, {
+      role: 'engraved',
+      weight: 700,
+      size: 26,
+      color: '#F3EFE4',
+      tracking: 4.5,
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'KHAKI · AUTOMATIC', 0, 146, {
+      role: 'sans',
+      weight: 600,
+      size: 13.5,
+      color: '#CFC6B0',
+      tracking: 3.0,
+    });
     ctx.restore();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = maxAnisotropy;
-    tex.needsUpdate = true;
-    return tex;
+    return finishTex();
   }
 
   if (watch.id === 'nomos-tangente') {
@@ -2391,9 +2917,13 @@ export function createDialTexture(
       if (h === 6) continue;
       const a = (h / 12) * Math.PI * 2 - Math.PI / 2;
       if (h % 2 === 0) {
-        ctx.fillStyle = '#14171A';
-        ctx.font = '400 44px "Plus Jakarta Sans", Arial, sans-serif';
-        ctx.fillText(String(h), Math.cos(a) * radius * 0.74, Math.sin(a) * radius * 0.74);
+        drawPadText(ctx, String(h), Math.cos(a) * radius * 0.74, Math.sin(a) * radius * 0.74, {
+          role: 'sans',
+          weight: 400,
+          size: 46,
+          color: '#14171A',
+          scaleX: 0.92,
+        });
       } else {
         ctx.strokeStyle = '#14171A';
         ctx.lineWidth = 4;
@@ -2428,18 +2958,23 @@ export function createDialTexture(
       ctx.stroke();
     }
 
-    ctx.fillStyle = '#14171A';
-    ctx.font = '600 28px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('N O M O S', 0, -148);
-    ctx.font = '500 13px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('GLASHÜTTE · neomatik', 0, -118);
+    drawPadText(ctx, 'NOMOS', 0, -148, {
+      role: 'sans',
+      weight: 600,
+      size: 27,
+      color: '#14171A',
+      tracking: 8.0,
+    });
+    drawPadText(ctx, 'GLASHÜTTE · neomatik', 0, -118, {
+      role: 'sans',
+      weight: 500,
+      size: 13,
+      color: '#2B3036',
+      tracking: 2.0,
+    });
     ctx.restore();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = maxAnisotropy;
-    tex.needsUpdate = true;
-    return tex;
+    return finishTex();
   }
 
   // --- PACK 3: CULT DIVE & ASYMMETRIC TOOL ICONS ---
@@ -2460,9 +2995,13 @@ export function createDialTexture(
     for (let h = 1; h <= 12; h++) {
       const a = (h / 12) * Math.PI * 2 - Math.PI / 2;
       if (h === 12 || h === 3 || h === 6 || h === 9) {
-        ctx.fillStyle = '#F3F4F6';
-        ctx.font = '700 50px "Plus Jakarta Sans", Arial, sans-serif';
-        ctx.fillText(String(h), Math.cos(a) * radius * 0.72, Math.sin(a) * radius * 0.72);
+        drawPadText(ctx, String(h), Math.cos(a) * radius * 0.72, Math.sin(a) * radius * 0.72, {
+          role: 'condensed',
+          weight: 700,
+          size: 54,
+          color: '#F3F4F6',
+          halo: 'dark',
+        });
       } else {
         ctx.save();
         ctx.rotate(a + Math.PI / 2);
@@ -2489,25 +3028,41 @@ export function createDialTexture(
     ctx.lineWidth = 2.5;
     ctx.fillRect(dx - 24, dy - 20, 48, 40);
     ctx.strokeRect(dx - 24, dy - 20, 48, 40);
-    ctx.fillStyle = '#F3F4F6';
-    ctx.font = '700 24px "JetBrains Mono", monospace';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), dx, dy + 1);
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), dx, dy + 1, {
+      role: 'condensed',
+      weight: 600,
+      size: 26,
+      color: '#F3F4F6',
+    });
 
-    ctx.fillStyle = '#F3F4F6';
-    ctx.font = '700 26px Georgia, serif';
-    ctx.fillText('BLANCPAIN', 0, -142);
-    ctx.font = 'italic 600 18px Georgia, serif';
-    ctx.fillStyle = '#CBD5E1';
-    ctx.fillText('Fifty Fathoms', 0, 128);
-    ctx.font = '600 12px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('300m / 1000ft', 0, 156);
+    drawPadText(ctx, 'BLANCPAIN', 0, -142, {
+      role: 'engraved',
+      weight: 700,
+      size: 25,
+      color: '#F3F4F6',
+      tracking: 4.2,
+      finish: 'silver',
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'Fifty Fathoms', 0, 128, {
+      role: 'serif',
+      weight: 600,
+      size: 24,
+      italic: true,
+      color: '#DCE4EE',
+      tracking: 0.9,
+      halo: 'dark',
+    });
+    drawPadText(ctx, '300m / 1000ft', 0, 156, {
+      role: 'sans',
+      weight: 600,
+      size: 12.5,
+      color: '#CBD5E1',
+      tracking: 1.8,
+    });
     ctx.restore();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = maxAnisotropy;
-    tex.needsUpdate = true;
-    return tex;
+    return finishTex();
   }
 
   if (watch.id === 'doxa-sub300') {
@@ -2548,24 +3103,38 @@ export function createDialTexture(
     ctx.lineWidth = 4;
     ctx.fillRect(dx - 32, -26, 64, 52);
     ctx.strokeRect(dx - 32, -26, 64, 52);
-    ctx.fillStyle = '#111315';
-    ctx.font = '700 32px "JetBrains Mono", monospace';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2);
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2, {
+      role: 'condensed',
+      weight: 700,
+      size: 34,
+      color: '#111315',
+    });
 
-    ctx.fillStyle = '#111315';
-    ctx.font = '800 34px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('DOXA', -92, -110);
-    ctx.font = '700 18px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SUB 300', 84, 108);
-    ctx.font = '600 14px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('PROFESSIONAL', 84, 134);
+    drawPadText(ctx, 'DOXA', -92, -110, {
+      role: 'condensed',
+      weight: 700,
+      size: 36,
+      color: '#111315',
+      tracking: 3.6,
+      inkStroke: 0.45,
+    });
+    drawPadText(ctx, 'SUB 300', 84, 106, {
+      role: 'condensed',
+      weight: 700,
+      size: 20,
+      color: '#111315',
+      tracking: 2.0,
+    });
+    drawPadText(ctx, 'PROFESSIONAL', 84, 134, {
+      role: 'sans',
+      weight: 700,
+      size: 12.5,
+      color: '#111315',
+      tracking: 2.0,
+    });
     ctx.restore();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = maxAnisotropy;
-    tex.needsUpdate = true;
-    return tex;
+    return finishTex();
   }
 
   if (watch.id === 'cartier-tank-louis') {
@@ -2632,7 +3201,7 @@ export function createDialTexture(
       ['XI', -rw * 0.62, -numY, -0.35],
     ];
     ctx.fillStyle = '#141619';
-    ctx.font = '700 34px Georgia, serif';
+    ctx.font = horoFont('engraved', 700, 34);
     tankPos.forEach(([lbl, x, y, rot]) => {
       ctx.save();
       ctx.translate(x, y);
@@ -2642,18 +3211,24 @@ export function createDialTexture(
       ctx.restore();
     });
 
-    ctx.fillStyle = '#141619';
-    ctx.font = '700 24px Georgia, serif';
-    ctx.fillText('CARTIER', 0, -108);
-    ctx.font = '500 12px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SWISS MADE', 0, 128);
+    drawPadText(ctx, 'CARTIER', 0, -108, {
+      role: 'engraved',
+      weight: 700,
+      size: 22,
+      color: '#141619',
+      tracking: 4.4,
+      inkStroke: 0.3,
+    });
+    drawPadText(ctx, 'SWISS MADE', 0, 128, {
+      role: 'sans',
+      weight: 600,
+      size: 11,
+      color: '#2B2F36',
+      tracking: 2.6,
+    });
     ctx.restore();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = maxAnisotropy;
-    tex.needsUpdate = true;
-    return tex;
+    return finishTex();
   }
 
   if (watch.id === 'cartier-crash') {
@@ -2703,23 +3278,28 @@ export function createDialTexture(
       ctx.translate(Math.cos(a) * r, Math.sin(a) * r);
       ctx.rotate(a + Math.PI / 2 + Math.sin(-a * 2) * 0.2);
       ctx.scale(0.84, 1.26);
-      ctx.font = 'italic 700 31px Georgia, serif';
+      ctx.font = horoFont('serif', 700, 34, true);
       ctx.fillText(lbl, 0, 0);
       ctx.restore();
     });
 
-    ctx.fillStyle = '#15171A';
-    ctx.font = '700 22px Georgia, serif';
-    ctx.fillText('CARTIER', -6, -72);
-    ctx.font = '500 12px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('LONDON', 8, 86);
+    drawPadText(ctx, 'CARTIER', -6, -72, {
+      role: 'engraved',
+      weight: 700,
+      size: 20,
+      color: '#15171A',
+      tracking: 3.6,
+    });
+    drawPadText(ctx, 'LONDON', 8, 86, {
+      role: 'sans',
+      weight: 600,
+      size: 11,
+      color: '#2B2F36',
+      tracking: 3.2,
+    });
     ctx.restore();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = maxAnisotropy;
-    tex.needsUpdate = true;
-    return tex;
+    return finishTex();
   }
 
   // --- PACK 4: PRECISION HIGH-BEAT & AVANT-GARDE ENGINEERING ---
@@ -2747,31 +3327,57 @@ export function createDialTexture(
     ctx.lineWidth = 4;
     ctx.fillRect(dx - 34, -26, 68, 52);
     ctx.strokeRect(dx - 34, -26, 68, 52);
-    ctx.fillStyle = '#111827';
-    ctx.font = '700 32px "JetBrains Mono", monospace';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2);
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2, {
+      role: 'condensed',
+      weight: 600,
+      size: 34,
+      color: '#111827',
+    });
 
-    ctx.fillStyle = '#111827';
-    ctx.font = '700 34px Georgia, serif';
-    ctx.fillText('GS', 0, -162);
-    ctx.font = '600 22px Georgia, serif';
-    ctx.fillText('Grand Seiko', 0, -124);
-    ctx.fillStyle = '#334155';
-    ctx.font = '600 15px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('AUTOMATIC', 0, 124);
-    ctx.fillStyle = '#1E3A8A';
-    ctx.font = '700 16px "JetBrains Mono", monospace';
-    ctx.fillText('HI-BEAT 36000', 0, 150);
-    ctx.fillStyle = '#475569';
-    ctx.font = '600 12px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('80 HOURS · CAL. 9SA5', 0, 174);
+    drawPadText(ctx, 'GS', 0, -162, {
+      role: 'serif',
+      weight: 700,
+      size: 42,
+      color: '#111827',
+      tracking: 2.2,
+      finish: 'dark-metallic',
+      halo: 'light',
+    });
+    drawPadText(ctx, 'Grand Seiko', 0, -122, {
+      role: 'serif',
+      weight: 600,
+      size: 27,
+      color: '#111827',
+      tracking: 1.0,
+      halo: 'light',
+    });
+    drawPadText(ctx, 'AUTOMATIC', 0, 124, {
+      role: 'sans',
+      weight: 600,
+      size: 13.5,
+      color: '#1E293B',
+      tracking: 3.2,
+      halo: 'light',
+    });
+    drawPadText(ctx, 'HI-BEAT 36000', 0, 150, {
+      role: 'condensed',
+      weight: 700,
+      size: 16,
+      color: '#1E3A8A',
+      tracking: 2.2,
+      halo: 'light',
+    });
+    drawPadText(ctx, '80 HOURS · CAL. 9SA5', 0, 174, {
+      role: 'sans',
+      weight: 600,
+      size: 11.5,
+      color: '#334155',
+      tracking: 2.0,
+      halo: 'light',
+    });
     ctx.restore();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = maxAnisotropy;
-    tex.needsUpdate = true;
-    return tex;
+    return finishTex();
   }
 
   if (watch.id === 'gp-laureato') {
@@ -2794,25 +3400,49 @@ export function createDialTexture(
     ctx.lineWidth = 3;
     ctx.fillRect(dx - 30, -24, 60, 48);
     ctx.strokeRect(dx - 30, -24, 60, 48);
-    ctx.fillStyle = '#F8FAFC';
-    ctx.font = '700 30px "JetBrains Mono", monospace';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2);
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), dx, 2, {
+      role: 'condensed',
+      weight: 600,
+      size: 32,
+      color: '#F8FAFC',
+    });
 
-    ctx.fillStyle = '#F1F5F9';
-    ctx.font = '700 30px Georgia, serif';
-    ctx.fillText('G P', 0, -158);
-    ctx.font = '600 16px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('GIRARD-PERREGAUX', 0, -124);
-    ctx.fillStyle = '#CBD5E1';
-    ctx.font = '600 14px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('LAUREATO · 1791', 0, 148);
+    // Smooth Clous de Paris signature cartouche behind GIRARD-PERREGAUX
+    drawDialCartouche(ctx, 0, -124, 246, 34, dial.baseHex, {
+      radius: 3,
+      opacity: 0.9,
+    });
+    drawPadText(ctx, 'GP', 0, -162, {
+      role: 'engraved',
+      weight: 700,
+      size: 32,
+      color: '#F1F5F9',
+      tracking: 5.0,
+      finish: 'silver',
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'GIRARD-PERREGAUX', 0, -124, {
+      role: 'sans',
+      weight: 600,
+      size: 14.5,
+      color: '#F1F5F9',
+      tracking: 2.6,
+      halo: 'dark',
+    });
+    drawDialCartouche(ctx, 0, 148, 174, 28, dial.baseHex, {
+      radius: 3,
+      opacity: 0.88,
+    });
+    drawPadText(ctx, 'LAUREATO · 1791', 0, 148, {
+      role: 'condensed',
+      weight: 600,
+      size: 14,
+      color: '#CBD5E1',
+      tracking: 2.8,
+    });
     ctx.restore();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = maxAnisotropy;
-    tex.needsUpdate = true;
-    return tex;
+    return finishTex();
   }
 
   if (watch.id === 'piaget-polo-79') {
@@ -2830,18 +3460,29 @@ export function createDialTexture(
       ctx.fill();
     }
 
-    ctx.fillStyle = '#2B1F06';
-    ctx.font = '700 30px Georgia, serif';
-    ctx.fillText('P I A G E T', 0, -138);
-    ctx.font = '600 13px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SWISS · 1979', 0, 152);
+    drawDialCartouche(ctx, 0, -138, 198, 40, dial.baseHex, {
+      radius: 3,
+      opacity: 0.9,
+    });
+    drawPadText(ctx, 'PIAGET', 0, -138, {
+      role: 'engraved',
+      weight: 700,
+      size: 27,
+      color: '#2B1F06',
+      tracking: 6.4,
+      halo: 'light',
+    });
+    drawPadText(ctx, 'SWISS · 1979', 0, 152, {
+      role: 'sans',
+      weight: 600,
+      size: 12.5,
+      color: '#2B1F06',
+      tracking: 3.0,
+      halo: 'light',
+    });
     ctx.restore();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = maxAnisotropy;
-    tex.needsUpdate = true;
-    return tex;
+    return finishTex();
   }
 
   if (watch.id === 'lange-zeitwerk') {
@@ -2879,9 +3520,13 @@ export function createDialTexture(
       ctx.roundRect(wx - 92, -56, 184, 112, 10);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = '#F8FAFC';
-      ctx.font = '700 84px "JetBrains Mono", monospace';
-      ctx.fillText(text, wx, 6);
+      drawPadText(ctx, text, wx, 4, {
+        role: 'condensed',
+        weight: 600,
+        size: 88,
+        color: '#F8FAFC',
+        tracking: 4,
+      });
     };
     const fallbackNow = new Date();
     const h24 = dateOverride?.hours24 ?? fallbackNow.getHours();
@@ -2926,18 +3571,37 @@ export function createDialTexture(
     ctx.beginPath();
     ctx.arc(0, -radius * 0.42, 82, -Math.PI * 0.32, -Math.PI * 0.15);
     ctx.stroke();
-    ctx.fillStyle = '#EF4444';
-    ctx.font = '700 13px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('AB', 88, -radius * 0.46);
-    ctx.fillStyle = '#E5E7EB';
-    ctx.fillText('AUF', -92, -radius * 0.46);
+    drawPadText(ctx, 'AB', 88, -radius * 0.46, {
+      role: 'condensed',
+      weight: 700,
+      size: 14,
+      color: '#EF4444',
+      tracking: 1.4,
+    });
+    drawPadText(ctx, 'AUF', -92, -radius * 0.46, {
+      role: 'condensed',
+      weight: 700,
+      size: 14,
+      color: '#E5E7EB',
+      tracking: 1.4,
+    });
 
-    ctx.fillStyle = '#F3F4F6';
-    ctx.font = '700 22px Georgia, serif';
-    ctx.fillText('A. LANGE & SÖHNE', 0, -radius * 0.72);
-    ctx.font = '500 13px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillStyle = '#CBD5E1';
-    ctx.fillText('GLASHÜTTE I/SA · ZEITWERK', 0, -radius * 0.62);
+    drawPadText(ctx, 'A. LANGE & SÖHNE', 0, -radius * 0.72, {
+      role: 'engraved',
+      weight: 700,
+      size: 20,
+      color: '#F3F4F6',
+      tracking: 2.2,
+      finish: 'silver',
+      halo: 'dark',
+    });
+    drawPadText(ctx, 'GLASHÜTTE I/SA · ZEITWERK', 0, -radius * 0.62, {
+      role: 'sans',
+      weight: 600,
+      size: 11.5,
+      color: '#CBD5E1',
+      tracking: 2.6,
+    });
     ctx.restore();
 
     return finishTex();
@@ -2975,19 +3639,35 @@ export function createDialTexture(
     ctx.strokeRect(-fw + 14, -fh + 14, (fw - 14) * 2, (fh - 14) * 2);
 
     // Top / Bottom Legends
-    ctx.fillStyle = '#F8FAFC';
-    ctx.font = '800 32px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('CASIO', 0, -fh + 54);
-    ctx.fillStyle = '#F59E0B';
-    ctx.font = '700 15px "JetBrains Mono", monospace';
-    ctx.fillText('ILLUMINATOR · SHOCK RESIST', 0, -fh + 86);
+    drawPadText(ctx, 'CASIO', 0, -fh + 54, {
+      role: 'sans',
+      weight: 700,
+      size: 32,
+      color: '#F8FAFC',
+      tracking: 4.5,
+    });
+    drawPadText(ctx, 'ILLUMINATOR · SHOCK RESIST', 0, -fh + 86, {
+      role: 'condensed',
+      weight: 600,
+      size: 15,
+      color: '#F59E0B',
+      tracking: 2.2,
+    });
 
-    ctx.fillStyle = '#38BDF8';
-    ctx.font = '700 16px "JetBrains Mono", monospace';
-    ctx.fillText('WATER 20BAR RESIST', 0, fh - 48);
-    ctx.fillStyle = '#94A3B8';
-    ctx.font = '600 13px "JetBrains Mono", monospace';
-    ctx.fillText('ALARM CHRONO · ELECTRO LUMINESCENCE', 0, fh - 24);
+    drawPadText(ctx, 'WATER 20BAR RESIST', 0, fh - 48, {
+      role: 'condensed',
+      weight: 700,
+      size: 16.5,
+      color: '#38BDF8',
+      tracking: 2.0,
+    });
+    drawPadText(ctx, 'ALARM CHRONO · ELECTRO LUMINESCENCE', 0, fh - 24, {
+      role: 'condensed',
+      weight: 600,
+      size: 12.5,
+      color: '#94A3B8',
+      tracking: 1.6,
+    });
 
     // Central recessed greenish-grey positive LCD panel
     const lw = fw - 44;
@@ -3013,22 +3693,39 @@ export function createDialTexture(
     const dayStr = (dateOverride?.weekday ?? 'SUN').slice(0, 2);
     const dateNum = dateOverride?.dayNum ?? new Date().getDate();
     const monthNum = (dateOverride?.monthIdx ?? new Date().getMonth()) + 1;
-    ctx.fillStyle = '#151C16';
-    ctx.font = '700 38px "JetBrains Mono", monospace';
-    ctx.fillText(`${dayStr}  ${monthNum}-${dateNum}`, 0, -lh + 64);
+    drawPadText(ctx, dayStr, -124, -lh + 64, {
+      role: 'condensed',
+      weight: 700,
+      size: 38,
+      color: '#151C16',
+      tracking: 2,
+    });
+    drawSevenSegmentString(ctx, `${monthNum}-${dateNum}`, 66, -lh + 64, 42, {
+      activeColor: '#151C16',
+      ghostColor: 'rgba(20, 28, 22, 0.08)',
+    });
 
-    // Main digital time readout (crisp 7-segment feel)
+    // Main digital time readout (authentic beveled vector 7-segment LCD)
     const fallbackNow = new Date();
     const hh = String(dateOverride?.hours24 ?? fallbackNow.getHours()).padStart(2, '0');
     const mm = String(dateOverride?.minutes ?? fallbackNow.getMinutes()).padStart(2, '0');
     const ss = String(dateOverride?.seconds ?? fallbackNow.getSeconds()).padStart(2, '0');
-    ctx.font = '800 94px "JetBrains Mono", monospace';
-    ctx.fillText(`${hh}:${mm}`, -44, 58);
-    ctx.font = '700 44px "JetBrains Mono", monospace';
-    ctx.fillText(ss, lw - 66, 74);
+    drawSevenSegmentString(ctx, `${hh}:${mm}`, -56, 56, 102, {
+      activeColor: '#131A14',
+      ghostColor: 'rgba(19, 26, 20, 0.085)',
+    });
+    drawSevenSegmentString(ctx, ss, lw - 70, 74, 52, {
+      activeColor: '#131A14',
+      ghostColor: 'rgba(19, 26, 20, 0.085)',
+    });
 
-    ctx.font = '700 15px "JetBrains Mono", monospace';
-    ctx.fillText('24H   ALM   SIG', -lw + 92, -lh + 28);
+    drawPadText(ctx, '24H   ALM   SIG', -lw + 92, -lh + 28, {
+      role: 'condensed',
+      weight: 700,
+      size: 14,
+      color: '#151C16',
+      tracking: 1.4,
+    });
     ctx.restore();
 
     return finishTex();
@@ -3077,11 +3774,14 @@ export function createDialTexture(
     ctx.arc(fx, 0, 94, Math.PI * 0.62, Math.PI * 1.38);
     ctx.stroke();
     const dLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-    ctx.fillStyle = '#D1D5DB';
-    ctx.font = '700 18px "JetBrains Mono", monospace';
     dLabels.forEach((d, idx) => {
       const a = Math.PI * 0.68 + (idx / 6) * Math.PI * 0.64;
-      ctx.fillText(d, fx + Math.cos(a) * 74, Math.sin(a) * 74);
+      drawPadText(ctx, d, fx + Math.cos(a) * 74, Math.sin(a) * 74, {
+        role: 'condensed',
+        weight: 700,
+        size: 18,
+        color: '#D1D5DB',
+      });
     });
     // Day pointer needle synced to active weekday
     const weekdayKeys = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -3105,27 +3805,43 @@ export function createDialTexture(
     ctx.roundRect(-92, -46, 184, 92, 12);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#9CA3AF';
-    ctx.font = '700 14px "JetBrains Mono", monospace';
-    ctx.fillText('WR20BAR  MUTE', 0, -24);
-    ctx.fillStyle = '#E5E7EB';
-    ctx.font = '700 32px "JetBrains Mono", monospace';
+    drawPadText(ctx, 'WR20BAR  MUTE', 0, -24, {
+      role: 'condensed',
+      weight: 600,
+      size: 13,
+      color: '#9CA3AF',
+      tracking: 1.5,
+    });
     const fallbackNow = new Date();
     const h24 = dateOverride?.hours24 ?? fallbackNow.getHours();
     const mins = dateOverride?.minutes ?? fallbackNow.getMinutes();
-    ctx.fillText(
+    drawSevenSegmentString(
+      ctx,
       `${String(h24).padStart(2, '0')}:${String(mins).padStart(2, '0')}`,
       0,
-      14
+      14,
+      36,
+      {
+        activeColor: '#E5E7EB',
+        ghostColor: 'rgba(229, 231, 235, 0.08)',
+      }
     );
     ctx.restore();
 
-    ctx.fillStyle = '#E5E7EB';
-    ctx.font = '800 24px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('G-SHOCK', 0, -142);
-    ctx.fillStyle = '#9CA3AF';
-    ctx.font = '700 14px "JetBrains Mono", monospace';
-    ctx.fillText('CASIO · CARBON CORE', 0, -114);
+    drawPadText(ctx, 'G-SHOCK', 0, -142, {
+      role: 'condensed',
+      weight: 700,
+      size: 26,
+      color: '#E5E7EB',
+      tracking: 3.4,
+    });
+    drawPadText(ctx, 'CASIO · CARBON CORE', 0, -114, {
+      role: 'condensed',
+      weight: 600,
+      size: 13.5,
+      color: '#9CA3AF',
+      tracking: 2.2,
+    });
     ctx.restore();
 
     return finishTex();
@@ -3168,15 +3884,27 @@ export function createDialTexture(
     ctx.stroke();
 
     // Header typography
-    ctx.fillStyle = '#F8FAFC';
-    ctx.font = '800 32px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('CASIO', -fw + 102, -fh + 54);
-    ctx.fillStyle = '#F59E0B';
-    ctx.font = '700 17px "JetBrains Mono", monospace';
-    ctx.fillText('F-91W', fw - 84, -fh + 54);
-    ctx.fillStyle = '#60A5FA';
-    ctx.font = '700 14px "JetBrains Mono", monospace';
-    ctx.fillText('ALARM CHRONOGRAPH', 0, -fh + 92);
+    drawPadText(ctx, 'CASIO', -fw + 102, -fh + 54, {
+      role: 'sans',
+      weight: 700,
+      size: 31,
+      color: '#F8FAFC',
+      tracking: 3.4,
+    });
+    drawPadText(ctx, 'F-91W', fw - 84, -fh + 54, {
+      role: 'condensed',
+      weight: 700,
+      size: 19,
+      color: '#F59E0B',
+      tracking: 1.4,
+    });
+    drawPadText(ctx, 'ALARM CHRONOGRAPH', 0, -fh + 92, {
+      role: 'condensed',
+      weight: 700,
+      size: 14.5,
+      color: '#60A5FA',
+      tracking: 2.2,
+    });
 
     // Classic light-silver greenish LCD screen
     const lw = fw - 38;
@@ -3189,41 +3917,76 @@ export function createDialTexture(
 
     const dayStr = (dateOverride?.weekday ?? 'SUN').slice(0, 2);
     const dateNum = dateOverride?.dayNum ?? new Date().getDate();
-    ctx.fillStyle = '#141A15';
-    ctx.font = '700 32px "JetBrains Mono", monospace';
-    ctx.fillText(`${dayStr}   ${dateNum}`, 42, -46);
+    drawPadText(ctx, dayStr, 12, -46, {
+      role: 'condensed',
+      weight: 700,
+      size: 32,
+      color: '#141A15',
+      tracking: 2,
+    });
+    drawSevenSegmentString(ctx, String(dateNum), 118, -46, 36, {
+      activeColor: '#141A15',
+      ghostColor: 'rgba(20, 26, 21, 0.08)',
+    });
     const fallbackNow = new Date();
     const h24 = dateOverride?.hours24 ?? fallbackNow.getHours();
     const mins = dateOverride?.minutes ?? fallbackNow.getMinutes();
     const secs = dateOverride?.seconds ?? fallbackNow.getSeconds();
-    ctx.font = '700 17px "JetBrains Mono", monospace';
-    ctx.fillText(h24 >= 12 ? 'PM' : 'AM', -lw + 34, -44);
+    drawPadText(ctx, h24 >= 12 ? 'PM' : 'AM', -lw + 34, -44, {
+      role: 'condensed',
+      weight: 700,
+      size: 17,
+      color: '#141A15',
+    });
 
-    ctx.font = '800 76px "JetBrains Mono", monospace';
-    ctx.fillText(
+    drawSevenSegmentString(
+      ctx,
       `${String(h24 % 12 || 12).padStart(2, '0')}:${String(mins).padStart(2, '0')}`,
-      -32,
-      40
+      -42,
+      38,
+      82,
+      {
+        activeColor: '#141A15',
+        ghostColor: 'rgba(20, 26, 21, 0.085)',
+      }
     );
-    ctx.font = '700 36px "JetBrains Mono", monospace';
-    ctx.fillText(String(secs).padStart(2, '0'), lw - 48, 54);
+    drawSevenSegmentString(ctx, String(secs).padStart(2, '0'), lw - 52, 54, 42, {
+      activeColor: '#141A15',
+      ghostColor: 'rgba(20, 26, 21, 0.085)',
+    });
 
     // Bottom WR emblem & Water Resist
-    ctx.fillStyle = '#EF4444';
-    ctx.font = '800 20px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('WATER', -84, fh - 60);
-    ctx.fillStyle = '#F8FAFC';
+    drawPadText(ctx, 'WATER', -84, fh - 60, {
+      role: 'condensed',
+      weight: 700,
+      size: 21,
+      color: '#EF4444',
+      tracking: 1.6,
+    });
     ctx.strokeStyle = '#EF4444';
     ctx.lineWidth = 3;
     ctx.strokeRect(-26, fh - 76, 52, 32);
-    ctx.font = '800 20px "JetBrains Mono", monospace';
-    ctx.fillText('WR', 0, fh - 60);
-    ctx.fillStyle = '#60A5FA';
-    ctx.font = '800 20px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('RESIST', 86, fh - 60);
-    ctx.fillStyle = '#94A3B8';
-    ctx.font = '600 12px "JetBrains Mono", monospace';
-    ctx.fillText('◄ LIGHT     MODE     24H ►', 0, fh - 26);
+    drawPadText(ctx, 'WR', 0, fh - 60, {
+      role: 'condensed',
+      weight: 700,
+      size: 21,
+      color: '#F8FAFC',
+      tracking: 1.4,
+    });
+    drawPadText(ctx, 'RESIST', 86, fh - 60, {
+      role: 'condensed',
+      weight: 700,
+      size: 21,
+      color: '#60A5FA',
+      tracking: 1.6,
+    });
+    drawPadText(ctx, '◄ LIGHT     MODE     24H ►', 0, fh - 26, {
+      role: 'condensed',
+      weight: 600,
+      size: 12,
+      color: '#94A3B8',
+      tracking: 1.4,
+    });
     ctx.restore();
 
     return finishTex();
@@ -3247,73 +4010,192 @@ export function createDialTexture(
     ctx.roundRect(cx - 115, cy - 226, 230, 48, 18);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#141719';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = '700 22px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText(weekday, cx, cy - 201);
+    drawPadText(ctx, weekday, cx, cy - 201, {
+      role: 'sans',
+      weight: 700,
+      size: 20,
+      color: '#141719',
+      tracking: 2.2,
+    });
     ctx.restore();
   }
 
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  const rolexHalo = dial.lightText ? 'dark' : 'light';
+  drawPadText(ctx, 'ROLEX', cx, watch.hasDayWindow ? cy - 142 : cy - 130, {
+    role: 'engraved',
+    weight: 700,
+    size: 31,
+    color: ink,
+    tracking: 8.2,
+    finish: dial.lightText ? 'silver' : 'dark-metallic',
+    halo: rolexHalo,
+    inkStroke: 0.35,
+  });
 
-  ctx.fillStyle = ink;
-  ctx.font = '600 32px Georgia, serif';
-  ctx.fillText('R O L E X', cx, watch.hasDayWindow ? cy - 142 : cy - 130);
-
-  ctx.fillStyle = mutedInk;
-  ctx.font = '500 16px "Plus Jakarta Sans", Arial, sans-serif';
-  ctx.fillText('OYSTER PERPETUAL', cx, watch.hasDayWindow ? cy - 110 : cy - 98);
+  drawPadText(ctx, 'OYSTER PERPETUAL', cx, watch.hasDayWindow ? cy - 109 : cy - 97, {
+    role: 'sans',
+    weight: 600,
+    size: 14.5,
+    color: mutedInk,
+    tracking: 3.4,
+    halo: rolexHalo,
+    inkStroke: 0.25,
+  });
 
   if (watch.id === 'submariner') {
-    ctx.fillStyle = ink;
-    ctx.font = '600 19px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SUBMARINER', cx, cy + 110);
-    ctx.fillStyle = mutedInk;
-    ctx.font = '500 15px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('1000ft = 300m', cx, cy + 138);
-    ctx.font = '500 12px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SUPERLATIVE CHRONOMETER', cx, cy + 164);
-    ctx.fillText('OFFICIALLY CERTIFIED', cx, cy + 182);
+    drawPadText(ctx, 'SUBMARINER', cx, cy + 110, {
+      role: 'sans',
+      weight: 700,
+      size: 17.5,
+      color: ink,
+      tracking: 3.2,
+      halo: rolexHalo,
+      inkStroke: 0.3,
+    });
+    drawPadText(ctx, '1000ft = 300m', cx, cy + 138, {
+      role: 'sans',
+      weight: 600,
+      size: 14,
+      color: mutedInk,
+      tracking: 1.8,
+      halo: rolexHalo,
+    });
+    drawPadText(ctx, 'SUPERLATIVE CHRONOMETER', cx, cy + 164, {
+      role: 'condensed',
+      weight: 600,
+      size: 12.5,
+      color: mutedInk,
+      tracking: 2.2,
+      halo: rolexHalo,
+    });
+    drawPadText(ctx, 'OFFICIALLY CERTIFIED', cx, cy + 182, {
+      role: 'condensed',
+      weight: 600,
+      size: 12.5,
+      color: mutedInk,
+      tracking: 2.4,
+      halo: rolexHalo,
+    });
   } else if (watch.id === 'yachtmaster') {
-    ctx.fillStyle = accentInk;
-    ctx.font = '700 19px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('YACHT-MASTER', cx, cy + 112);
-    ctx.fillStyle = mutedInk;
-    ctx.font = '500 15px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('330ft = 100m', cx, cy + 138);
-    ctx.font = '500 12px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SUPERLATIVE CHRONOMETER', cx, cy + 164);
-    ctx.fillText('OFFICIALLY CERTIFIED', cx, cy + 182);
+    drawPadText(ctx, 'YACHT-MASTER', cx, cy + 112, {
+      role: 'sans',
+      weight: 700,
+      size: 17.5,
+      color: accentInk,
+      tracking: 3.0,
+      halo: rolexHalo,
+      inkStroke: 0.3,
+    });
+    drawPadText(ctx, '330ft = 100m', cx, cy + 138, {
+      role: 'sans',
+      weight: 600,
+      size: 14,
+      color: mutedInk,
+      tracking: 1.8,
+      halo: rolexHalo,
+    });
+    drawPadText(ctx, 'SUPERLATIVE CHRONOMETER', cx, cy + 164, {
+      role: 'condensed',
+      weight: 600,
+      size: 12.5,
+      color: mutedInk,
+      tracking: 2.2,
+      halo: rolexHalo,
+    });
+    drawPadText(ctx, 'OFFICIALLY CERTIFIED', cx, cy + 182, {
+      role: 'condensed',
+      weight: 600,
+      size: 12.5,
+      color: mutedInk,
+      tracking: 2.4,
+      halo: rolexHalo,
+    });
   } else if (watch.id === 'datejust' || watch.id === 'daydate') {
-    ctx.fillStyle = ink;
-    ctx.font = '600 18px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText(watch.id === 'daydate' ? 'DAY-DATE' : 'DATEJUST', cx, cy - 78);
-    ctx.fillStyle = mutedInk;
-    ctx.font = '500 12px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SUPERLATIVE CHRONOMETER', cx, cy + 148);
-    ctx.fillText('OFFICIALLY CERTIFIED', cx, cy + 166);
+    drawPadText(ctx, watch.id === 'daydate' ? 'DAY-DATE' : 'DATEJUST', cx, cy - 76, {
+      role: 'sans',
+      weight: 600,
+      size: 15.5,
+      color: ink,
+      tracking: 3.4,
+      halo: rolexHalo,
+    });
+    drawPadText(ctx, 'SUPERLATIVE CHRONOMETER', cx, cy + 148, {
+      role: 'condensed',
+      weight: 600,
+      size: 12.5,
+      color: mutedInk,
+      tracking: 2.2,
+      halo: rolexHalo,
+    });
+    drawPadText(ctx, 'OFFICIALLY CERTIFIED', cx, cy + 166, {
+      role: 'condensed',
+      weight: 600,
+      size: 12.5,
+      color: mutedInk,
+      tracking: 2.4,
+      halo: rolexHalo,
+    });
   } else if (watch.id === 'gmt' || watch.id === 'explorer2') {
-    ctx.fillStyle = accentInk;
-    ctx.font = '600 18px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText(watch.id === 'explorer2' ? 'EXPLORER II' : 'GMT-MASTER II', cx, cy + 114);
-    ctx.fillStyle = mutedInk;
-    ctx.font = '500 12px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SUPERLATIVE CHRONOMETER', cx, cy + 146);
-    ctx.fillText('OFFICIALLY CERTIFIED', cx, cy + 164);
+    drawPadText(ctx, watch.id === 'explorer2' ? 'EXPLORER II' : 'GMT-MASTER II', cx, cy + 114, {
+      role: 'sans',
+      weight: 700,
+      size: 16.5,
+      color: accentInk,
+      tracking: 2.8,
+      halo: rolexHalo,
+      inkStroke: 0.25,
+    });
+    drawPadText(ctx, 'SUPERLATIVE CHRONOMETER', cx, cy + 146, {
+      role: 'condensed',
+      weight: 600,
+      size: 12.5,
+      color: mutedInk,
+      tracking: 2.2,
+      halo: rolexHalo,
+    });
+    drawPadText(ctx, 'OFFICIALLY CERTIFIED', cx, cy + 164, {
+      role: 'condensed',
+      weight: 600,
+      size: 12.5,
+      color: mutedInk,
+      tracking: 2.4,
+      halo: rolexHalo,
+    });
   } else if (watch.id === 'milgauss') {
-    ctx.fillStyle = accentInk;
-    ctx.font = '700 19px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('M I L G A U S S', cx, cy + 116);
-    ctx.fillStyle = mutedInk;
-    ctx.font = '500 12px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SUPERLATIVE CHRONOMETER', cx, cy + 148);
-    ctx.fillText('OFFICIALLY CERTIFIED', cx, cy + 166);
+    drawPadText(ctx, 'MILGAUSS', cx, cy + 116, {
+      role: 'sans',
+      weight: 700,
+      size: 18,
+      color: accentInk,
+      tracking: 5.2,
+      halo: rolexHalo,
+      inkStroke: 0.3,
+    });
+    drawPadText(ctx, 'SUPERLATIVE CHRONOMETER', cx, cy + 148, {
+      role: 'condensed',
+      weight: 600,
+      size: 12.5,
+      color: mutedInk,
+      tracking: 2.2,
+      halo: rolexHalo,
+    });
+    drawPadText(ctx, 'OFFICIALLY CERTIFIED', cx, cy + 166, {
+      role: 'condensed',
+      weight: 600,
+      size: 12.5,
+      color: mutedInk,
+      tracking: 2.4,
+      halo: rolexHalo,
+    });
   } else if (watch.id === 'skydweller') {
-    ctx.fillStyle = ink;
-    ctx.font = '600 17px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SKY-DWELLER', cx, cy - 70);
+    drawPadText(ctx, 'SKY-DWELLER', cx, cy - 70, {
+      role: 'sans',
+      weight: 600,
+      size: 15.5,
+      color: ink,
+      tracking: 3.2,
+      halo: rolexHalo,
+    });
     // Static outer frame around off-center 24h disc
     ctx.strokeStyle = '#C9A857';
     ctx.lineWidth = 3;
@@ -3329,11 +4211,30 @@ export function createDialTexture(
     ctx.closePath();
     ctx.fill();
   } else if (watch.id === 'daytona') {
-    ctx.fillStyle = mutedInk;
-    ctx.font = '500 14px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('SUPERLATIVE CHRONOMETER', cx, cy - 72);
-    ctx.fillText('OFFICIALLY CERTIFIED', cx, cy - 52);
-    ctx.fillText('COSMOGRAPH', cx, cy - 32);
+    drawPadText(ctx, 'SUPERLATIVE CHRONOMETER', cx, cy - 72, {
+      role: 'condensed',
+      weight: 600,
+      size: 13,
+      color: mutedInk,
+      tracking: 2.2,
+      halo: rolexHalo,
+    });
+    drawPadText(ctx, 'OFFICIALLY CERTIFIED', cx, cy - 53, {
+      role: 'condensed',
+      weight: 600,
+      size: 13,
+      color: mutedInk,
+      tracking: 2.4,
+      halo: rolexHalo,
+    });
+    drawPadText(ctx, 'COSMOGRAPH', cx, cy - 32, {
+      role: 'sans',
+      weight: 600,
+      size: 13.5,
+      color: ink,
+      tracking: 3.2,
+      halo: rolexHalo,
+    });
 
     // Three Daytona contrasting chronograph sub-dials (3, 6, 9 o'clock)
     const subDials = [
@@ -3381,23 +4282,29 @@ export function createDialTexture(
       }
 
       // Numerals
-      ctx.fillStyle = '#F2EFE9';
-      ctx.font = '600 18px "Plus Jakarta Sans", Arial, sans-serif';
       sub.ticks.forEach((num, idx) => {
         const a = ((idx + 1) / sub.ticks.length) * Math.PI * 2 - Math.PI / 2;
-        ctx.fillText(
+        drawPadText(
+          ctx,
           String(num),
           sub.x + Math.cos(a) * (sr - 34),
-          sub.y + Math.sin(a) * (sr - 34)
+          sub.y + Math.sin(a) * (sr - 34),
+          { role: 'condensed', weight: 600, size: 19, color: '#F2EFE9' }
         );
       });
       ctx.restore();
     });
 
-    // Red DAYTONA arc above 6 o'clock subdial
-    ctx.fillStyle = '#D93838';
-    ctx.font = '700 19px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText('D A Y T O N A', cx, cy + 72);
+    // Iconic crimson curved DAYTONA signature hugging the 6 o'clock subdial rim
+    drawArcPadText(ctx, 'DAYTONA', cx, cy + 178, 111, 0, {
+      role: 'sans',
+      weight: 700,
+      size: 18,
+      color: '#DC2626',
+      tracking: 4.8,
+      halo: rolexHalo,
+      inkStroke: 0.35,
+    });
   }
 
   // Date aperture at 3 o'clock (for cyclops models)
@@ -3415,16 +4322,26 @@ export function createDialTexture(
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = '#111315';
-    ctx.font = '700 44px "JetBrains Mono", monospace';
-    ctx.fillText(String(dateOverride?.dayNum ?? new Date().getDate()), dx, dy + 2);
+    drawPadText(ctx, String(dateOverride?.dayNum ?? new Date().getDate()), dx, dy + 2, {
+      role: 'condensed',
+      weight: 700,
+      size: 46,
+      color: '#111315',
+      tracking: 0.6,
+    });
     ctx.restore();
   }
 
-  // SWISS MADE at 6 o'clock
-  ctx.fillStyle = mutedInk;
-  ctx.font = '500 13px "Plus Jakarta Sans", Arial, sans-serif';
-  ctx.fillText('SWISS   MADE', cx, cy + radius * 0.84);
+  // Authentic curved SWISS MADE at 6 o'clock perimeter
+  drawArcPadText(ctx, 'SWISS  MADE', cx, cy, radius * 0.855, Math.PI, {
+    role: 'sans',
+    weight: 600,
+    size: 12,
+    color: mutedInk,
+    tracking: 3.0,
+    halo: rolexHalo,
+    bottomArc: true,
+  });
 
   return finishTex();
 }
@@ -3557,16 +4474,26 @@ export function createBezelInsertTexture(
         if (m === 0) {
           ctx.save();
           ctx.rotate(a + Math.PI / 2);
-          ctx.fillStyle = '#E65314';
-          ctx.font = '800 22px "Plus Jakarta Sans", Arial, sans-serif';
-          ctx.fillText('FT', 0, -rOuterDepth);
+          drawBezelEngravedText(ctx, 'FT', 0, -rOuterDepth, {
+            size: 22,
+            color: '#E65314',
+            role: 'condensed',
+            weight: 700,
+            darkInk: true,
+            tracking: 1.4,
+          });
           ctx.restore();
         } else if (m % 5 === 0) {
           ctx.save();
           ctx.rotate(a + Math.PI / 2);
-          ctx.fillStyle = '#111418';
-          ctx.font = '800 26px "JetBrains Mono", monospace';
-          ctx.fillText(String(m), 0, -rInnerMin);
+          drawBezelEngravedText(ctx, String(m), 0, -rInnerMin, {
+            size: 27,
+            color: '#111418',
+            role: 'condensed',
+            weight: 700,
+            darkInk: true,
+            tracking: 1.0,
+          });
           ctx.restore();
         } else {
           ctx.strokeStyle = '#181C20';
@@ -3581,9 +4508,14 @@ export function createBezelInsertTexture(
         const a = (m / 60) * Math.PI * 2 - Math.PI / 2;
         ctx.save();
         ctx.rotate(a + Math.PI / 2);
-        ctx.fillStyle = '#E65314';
-        ctx.font = '800 24px "JetBrains Mono", monospace';
-        ctx.fillText(ft, 0, -rOuterDepth);
+        drawBezelEngravedText(ctx, ft, 0, -rOuterDepth, {
+          size: 24,
+          color: '#E65314',
+          role: 'condensed',
+          weight: 700,
+          darkInk: true,
+          tracking: 1.1,
+        });
         ctx.restore();
       });
     } else if (watch.id === 'blancpain-fifty-fathoms') {
@@ -3605,9 +4537,13 @@ export function createBezelInsertTexture(
         } else if (m === 15 || m === 30 || m === 45) {
           ctx.save();
           ctx.rotate(a + Math.PI / 2);
-          ctx.fillStyle = '#D9FCE8';
-          ctx.font = '700 46px "Plus Jakarta Sans", Arial, sans-serif';
-          ctx.fillText(String(m), 0, -rText);
+          drawBezelEngravedText(ctx, String(m), 0, -rText, {
+            size: 48,
+            color: '#D9FCE8',
+            role: 'condensed',
+            weight: 700,
+            tracking: 1.8,
+          });
           ctx.restore();
         } else if (m % 5 === 0) {
           ctx.strokeStyle = '#D9FCE8';
@@ -3651,14 +4587,14 @@ export function createBezelInsertTexture(
         } else if (m % 10 === 0) {
           ctx.save();
           ctx.rotate(a + Math.PI / 2);
-          ctx.fillStyle = isYacht ? '#E5E8EC' : numColor;
-          ctx.font = '700 44px "Plus Jakarta Sans", Arial, sans-serif';
-          if (isYacht) {
-            ctx.shadowColor = 'rgba(0,0,0,0.85)';
-            ctx.shadowOffsetY = 2;
-            ctx.shadowBlur = 3;
-          }
-          ctx.fillText(String(m), 0, -rText);
+          drawBezelEngravedText(ctx, String(m), 0, -rText, {
+            size: 46,
+            color: isYacht ? '#E5E8EC' : numColor,
+            role: 'condensed',
+            weight: 700,
+            raised: isYacht,
+            tracking: 1.6,
+          });
           ctx.restore();
         } else if (m <= 15 || m % 5 === 0) {
           const isFive = m % 5 === 0;
@@ -3687,9 +4623,14 @@ export function createBezelInsertTexture(
       const a = (idx / naviOuterNums.length) * Math.PI * 2 - Math.PI / 2;
       ctx.save();
       ctx.rotate(a + Math.PI / 2);
-      ctx.fillStyle = lbl === '10' || lbl === '60' ? '#EF4444' : '#F3F4F6';
-      ctx.font = '700 26px "JetBrains Mono", monospace';
-      ctx.fillText(lbl, 0, -rText + 10);
+      drawPadText(ctx, lbl, 0, -rText + 10, {
+        role: 'condensed',
+        weight: 700,
+        size: 26,
+        color: lbl === '10' || lbl === '60' ? '#EF4444' : '#F3F4F6',
+        tracking: 0.9,
+        halo: 'dark',
+      });
       ctx.restore();
     });
   } else if (watch.bezelType === 'gmt-cerachrom' || watch.bezelType === 'steel-24h') {
@@ -3710,9 +4651,14 @@ export function createBezelInsertTexture(
       } else if (h % 2 === 0) {
         ctx.save();
         ctx.rotate(a + Math.PI / 2);
-        ctx.fillStyle = numColor;
-        ctx.font = '700 42px "Plus Jakarta Sans", Arial, sans-serif';
-        ctx.fillText(String(h), 0, -rText);
+        drawBezelEngravedText(ctx, String(h), 0, -rText, {
+          size: 44,
+          color: numColor,
+          role: 'condensed',
+          weight: 700,
+          darkInk: isSteel24,
+          tracking: 1.6,
+        });
         ctx.restore();
       } else {
         ctx.fillStyle = numColor;
@@ -3746,12 +4692,18 @@ export function createBezelInsertTexture(
     const tachyInk = watch.id === 'omega-speedmaster' ? '#F3F4F6' : numColor;
     ctx.save();
     ctx.rotate((18 * Math.PI) / 180);
-    ctx.fillStyle = tachyInk;
-    ctx.font = '700 18px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.fillText(
+    drawBezelEngravedText(
+      ctx,
       watch.id === 'omega-speedmaster' ? 'TACHYMETRE' : 'UNITS PER HOUR',
       0,
-      -rText
+      -rText,
+      {
+        size: 19,
+        color: tachyInk,
+        role: 'condensed',
+        weight: 700,
+        tracking: 1.5,
+      }
     );
     ctx.restore();
 
@@ -3759,9 +4711,14 @@ export function createBezelInsertTexture(
       const a = ((deg - 90) * Math.PI) / 180;
       ctx.save();
       ctx.rotate(a + Math.PI / 2);
+      drawBezelEngravedText(ctx, label, 0, -rText + 4, {
+        size: 29,
+        color: tachyInk,
+        role: 'condensed',
+        weight: 700,
+        tracking: 1.1,
+      });
       ctx.fillStyle = tachyInk;
-      ctx.font = '700 28px "Plus Jakarta Sans", Arial, sans-serif';
-      ctx.fillText(label, 0, -rText + 4);
       ctx.beginPath();
       ctx.arc(0, -rText + (watch.id === 'omega-speedmaster' && label === '90' ? -22 : 26), 4, 0, Math.PI * 2);
       ctx.fill();
@@ -3774,6 +4731,8 @@ export function createBezelInsertTexture(
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = maxAnisotropy;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
   return texture;
 }
@@ -4053,53 +5012,65 @@ export function createRehautTexture(
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, w, h);
 
-  ctx.fillStyle = brand === 'AVI-8' ? 'rgba(237, 227, 194, 0.78)' : 'rgba(40, 44, 48, 0.72)';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = '600 26px "Plus Jakarta Sans", Arial, sans-serif';
+  const inkColor =
+    brand === 'AVI-8' ? 'rgba(237, 227, 194, 0.84)' : 'rgba(34, 38, 42, 0.78)';
 
   const slots = 12;
   const brandMarks: Record<WatchBrand, string> = {
-    ROLEX: 'R O L E X',
-    'AVI-8': 'A V I - 8',
-    OMEGA: 'O M E G A',
-    TUDOR: 'T U D O R',
+    ROLEX: 'ROLEX',
+    'AVI-8': 'AVI-8',
+    OMEGA: 'OMEGA',
+    TUDOR: 'TUDOR',
     'VACHERON CONSTANTIN': 'VACHERON CONSTANTIN',
     'AUDEMARS PIGUET': 'AUDEMARS PIGUET',
     'PATEK PHILIPPE': 'PATEK PHILIPPE',
-    CARTIER: 'C A R T I E R',
+    CARTIER: 'CARTIER',
     'JAEGER-LECOULTRE': 'JAEGER-LECOULTRE',
-    PANERAI: 'P A N E R A I',
+    PANERAI: 'PANERAI',
     'TAG HEUER': 'TAG HEUER',
-    BREITLING: 'B R E I T L I N G',
-    ZENITH: 'Z E N I T H',
+    BREITLING: 'BREITLING',
+    ZENITH: 'ZENITH',
     'IWC SCHAFFHAUSEN': 'IWC SCHAFFHAUSEN',
-    BREGUET: 'B R E G U E T',
+    BREGUET: 'BREGUET',
     'GRAND SEIKO': 'GRAND SEIKO',
     'A. LANGE & SÖHNE': 'A. LANGE & SÖHNE',
     'RICHARD MILLE': 'RICHARD MILLE',
     'F.P. JOURNE': 'F.P. JOURNE',
     'H. MOSER & CIE': 'H. MOSER & CIE',
-    'MB&F': 'M B & F',
-    BULGARI: 'B V L G A R I',
-    LONGINES: 'L O N G I N E S',
-    HAMILTON: 'H A M I L T O N',
+    'MB&F': 'MB&F',
+    BULGARI: 'BVLGARI',
+    LONGINES: 'LONGINES',
+    HAMILTON: 'HAMILTON',
     'NOMOS GLASHÜTTE': 'NOMOS GLASHÜTTE',
-    BLANCPAIN: 'B L A N C P A I N',
-    DOXA: 'D O X A',
+    BLANCPAIN: 'BLANCPAIN',
+    DOXA: 'DOXA',
     'GIRARD-PERREGAUX': 'GIRARD-PERREGAUX',
-    PIAGET: 'P I A G E T',
-    CASIO: 'C A S I O · G-SHOCK',
+    PIAGET: 'PIAGET',
+    CASIO: 'CASIO · G-SHOCK',
   };
-  const brandMark = brandMarks[brand] ?? 'R O L E X';
+  const brandMark = brandMarks[brand] ?? 'ROLEX';
+  const markTracking = brandMark.length <= 6 ? 7.5 : brandMark.length <= 10 ? 4.2 : 1.5;
+  const markSize = brandMark.length > 14 ? 19 : 23;
   for (let i = 0; i < slots; i++) {
     const x = ((i + 0.5) / slots) * w;
     if (i === 6) {
-      ctx.font = '600 22px "JetBrains Mono", monospace';
-      ctx.fillText(reference, x, h * 0.52);
-      ctx.font = '600 26px "Plus Jakarta Sans", Arial, sans-serif';
+      drawPadText(ctx, reference, x, h * 0.52, {
+        role: 'mono',
+        weight: 600,
+        size: 21,
+        color: inkColor,
+        tracking: 1.6,
+        finish: 'engraved',
+      });
     } else {
-      ctx.fillText(brandMark, x, h * 0.52);
+      drawPadText(ctx, brandMark, x, h * 0.52, {
+        role: 'engraved',
+        weight: 600,
+        size: markSize,
+        color: inkColor,
+        tracking: markTracking,
+        finish: 'engraved',
+      });
     }
   }
 
@@ -4107,6 +5078,8 @@ export function createRehautTexture(
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
   texture.anisotropy = maxAnisotropy;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
   return texture;
 }
 
@@ -4247,24 +5220,18 @@ export function createCasebackEngravingTexture(
     ctx.stroke();
   }
 
-  // Crisp engraved circular text around the center medallion
+  // Crisp laser-carved burin circular text around the center medallion (bottom half upright left-to-right)
   const drawArcText = (text: string, radius: number, centerAngle: number, step: number) => {
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.fillStyle = 'rgba(34, 38, 42, 0.72)';
-    ctx.font = '600 17px "Plus Jakarta Sans", Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const totalSpan = (text.length - 1) * step;
-    const startAngle = centerAngle - totalSpan * 0.5;
-    for (let i = 0; i < text.length; i++) {
-      const angle = startAngle + i * step;
-      ctx.save();
-      ctx.rotate(angle);
-      ctx.fillText(text[i], 0, -radius);
-      ctx.restore();
-    }
-    ctx.restore();
+    const isBottom = Math.abs(centerAngle - Math.PI) < 0.01;
+    drawArcPadText(ctx, text, cx, cy, radius, centerAngle, {
+      role: 'engraved',
+      weight: 600,
+      size: 16.5,
+      color: 'rgba(30, 34, 38, 0.78)',
+      finish: 'engraved',
+      bottomArc: isBottom,
+      fixedStepRad: step,
+    });
   };
 
   if (watch.brand === 'AVI-8') {
@@ -4412,18 +5379,22 @@ export function createCasebackEngravingTexture(
   // Optional bespoke user engraving rendered cleanly across center medallion
   const cleaned = customEngraving?.trim().slice(0, 18);
   if (cleaned) {
-    ctx.save();
-    ctx.fillStyle = 'rgba(28, 32, 36, 0.78)';
-    ctx.font = 'italic 600 22px Georgia, serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(cleaned.toUpperCase(), cx, cy);
-    ctx.restore();
+    drawPadText(ctx, cleaned.toUpperCase(), cx, cy, {
+      role: 'serif',
+      weight: 600,
+      size: 24,
+      italic: true,
+      color: 'rgba(26, 30, 34, 0.84)',
+      tracking: 2.2,
+      finish: 'engraved',
+    });
   }
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = maxAnisotropy;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
   texture.needsUpdate = true;
   return texture;
 }
@@ -4472,16 +5443,18 @@ export function createSkyDwellerDiscTexture(maxAnisotropy: number): THREE.Canvas
 
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.fillStyle = '#181B1F';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
     const rNum = size * 0.36;
     for (let h = 2; h <= 24; h += 2) {
       const a = (h / 24) * Math.PI * 2 - Math.PI / 2;
       ctx.save();
       ctx.rotate(a + Math.PI / 2);
-      ctx.font = '700 32px "Plus Jakarta Sans", Arial, sans-serif';
-      ctx.fillText(String(h), 0, -rNum);
+      drawPadText(ctx, String(h), 0, -rNum, {
+        role: 'condensed',
+        weight: 700,
+        size: 32,
+        color: '#181B1F',
+        tracking: 1.0,
+      });
       ctx.restore();
     }
     ctx.restore();
@@ -4489,6 +5462,8 @@ export function createSkyDwellerDiscTexture(maxAnisotropy: number): THREE.Canvas
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = maxAnisotropy;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
     tex.needsUpdate = true;
     return tex;
   });
@@ -4579,13 +5554,21 @@ export function createReversoBackDialTexture(maxAnisotropy: number): THREE.Canva
     ctx.lineWidth = 3;
     ctx.stroke();
 
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#1B222C';
-    ctx.font = '700 20px Georgia, serif';
-    ctx.fillText('JAEGER-LECOULTRE', 0, -210);
-    ctx.font = '600 13px "JetBrains Mono", monospace';
-    ctx.fillText('HOME TIME · DUOFACE', 0, -34);
+    drawPadText(ctx, 'JAEGER-LECOULTRE', 0, -210, {
+      role: 'engraved',
+      weight: 600,
+      size: 21,
+      color: '#1B222C',
+      tracking: 3.0,
+      finish: 'dark-metallic',
+    });
+    drawPadText(ctx, 'HOME TIME · DUOFACE', 0, -34, {
+      role: 'sans',
+      weight: 600,
+      size: 12.5,
+      color: '#27303C',
+      tracking: 2.2,
+    });
 
     // Lower 24-hour Night / Day subdial
     ctx.beginPath();
@@ -4595,15 +5578,31 @@ export function createReversoBackDialTexture(maxAnisotropy: number): THREE.Canva
     ctx.strokeStyle = '#B89B5E';
     ctx.lineWidth = 4;
     ctx.stroke();
-    ctx.fillStyle = '#F7E7B8';
-    ctx.font = '700 24px "JetBrains Mono", monospace';
-    ctx.fillText('24H', 0, 148);
-    ctx.fillText('12', 0, 272);
+    drawPadText(ctx, '24H', 0, 148, {
+      role: 'condensed',
+      weight: 700,
+      size: 25,
+      color: '#F7E7B8',
+      finish: 'gilt',
+      halo: 'dark',
+      tracking: 1.6,
+    });
+    drawPadText(ctx, '12', 0, 272, {
+      role: 'condensed',
+      weight: 700,
+      size: 25,
+      color: '#F7E7B8',
+      finish: 'gilt',
+      halo: 'dark',
+      tracking: 1.6,
+    });
     ctx.restore();
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = maxAnisotropy;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
     tex.needsUpdate = true;
     return tex;
   });
@@ -4730,16 +5729,28 @@ export function createQuartzPcbTexture(
     }
 
     // Crisp white PCB silkscreen markings
-    ctx.fillStyle = 'rgba(241, 245, 249, 0.85)';
-    ctx.font = '700 18px "JetBrains Mono", monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(moduleLabel, cx, 88);
-    ctx.font = '600 13px "JetBrains Mono", monospace';
-    ctx.fillText('32,768 Hz · AC RESET · JAPAN', cx, 424);
+    drawPadText(ctx, moduleLabel, cx, 88, {
+      role: 'mono',
+      weight: 700,
+      size: 18,
+      color: 'rgba(241, 245, 249, 0.9)',
+      tracking: 1.4,
+      halo: 'dark',
+    });
+    drawPadText(ctx, '32,768 Hz · AC RESET · JAPAN', cx, 424, {
+      role: 'mono',
+      weight: 600,
+      size: 13,
+      color: 'rgba(241, 245, 249, 0.85)',
+      tracking: 1.0,
+      halo: 'dark',
+    });
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = maxAnisotropy;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
     tex.needsUpdate = true;
     return tex;
   });

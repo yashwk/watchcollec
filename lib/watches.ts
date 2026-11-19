@@ -267,7 +267,7 @@ export interface WatchSpec {
     | 'santos'
     | 'reverso'
     | 'tonneau';
-  braceletType: 'oyster' | 'jubilee' | 'president' | 'royal-oak' | 'nautilus' | 'santos';
+  braceletType: 'oyster' | 'jubilee' | 'president' | 'royal-oak' | 'nautilus' | 'santos' | 'overseas';
   handStyle?:
     | 'classic'
     | 'snowflake'
@@ -559,6 +559,7 @@ export const WATCH_MODELS: WatchSpec[] = [
     bezelType: 'fluted',
     braceletType: 'jubilee',
     hasCyclops: true,
+    hasCrownGuards: false,
     hasChronoPushers: false,
     hasGmtHand: false,
     hasSkyDwellerDisc: true,
@@ -783,6 +784,7 @@ export const WATCH_MODELS: WatchSpec[] = [
     hasChronoPushers: false,
     hasGmtHand: false,
     hasReversoFlip: true,
+    handStyle: 'dauphine',
     defaultAlloy: 'oystersteel',
     defaultDial: 'royal-blue',
     defaultBezel: 'obsidian',
@@ -817,6 +819,8 @@ export const WATCH_MODELS: WatchSpec[] = [
     hasChronoPushers: false,
     hasGmtHand: false,
     hasPowerReserveHand: true,
+    hasCrownGuards: false,
+    handStyle: 'dauphine',
     isSpringDrive: true,
     defaultAlloy: 'oystersteel',
     defaultDial: 'snowflake',
@@ -853,6 +857,7 @@ export const WATCH_MODELS: WatchSpec[] = [
     hasMoonphase: true,
     hasPowerReserveHand: true,
     hasBigDate: true,
+    handStyle: 'dauphine',
     defaultAlloy: 'everose',
     defaultDial: 'panda',
     defaultBezel: 'obsidian',
@@ -915,15 +920,15 @@ export const WATCH_MODELS: WatchSpec[] = [
     powerReserve: '60 hours',
     waterResistance: '150 m / 500 ft',
     bezelType: 'overseas',
-    braceletType: 'royal-oak',
+    braceletType: 'overseas',
     hasCyclops: false,
     hasDateWindow: true,
-    hasCrownGuards: true,
+    hasCrownGuards: false,
     hasChronoPushers: false,
     hasGmtHand: false,
     defaultAlloy: 'oystersteel',
     defaultDial: 'default',
-    defaultBezel: 'obsidian',
+    defaultBezel: 'default',
     defaultBelt: 'bracelet',
     bezelPrimaryHex: '#CFD5DA',
     image: datejustImg,
@@ -3182,7 +3187,13 @@ export function resolveWatchCapabilities(watch: WatchSpec): WatchCapabilities {
 
   // 2. Authentic Crown System per Reference
   const isCasio = watch.brand === 'CASIO';
-  const hasDateMechanism = Boolean(watch.hasDateWindow || watch.hasDayWindow || watch.hasMoonphase);
+  const hasDateMechanism = Boolean(
+    watch.hasDateWindow ||
+      watch.hasDayWindow ||
+      watch.hasMoonphase ||
+      watch.hasCyclops ||
+      watch.hasBigDate
+  );
   const isScrewDown =
     !isCasio &&
     (watch.brand === 'ROLEX' ||
@@ -3214,8 +3225,13 @@ export function resolveWatchCapabilities(watch: WatchSpec): WatchCapabilities {
     !isCasio &&
     !beatProfile.isQuartz &&
     !beatProfile.isSpringDrive &&
+    id !== 'ap-royal-oak' &&
     id !== 'pp-worldtime' &&
-    id !== 'fpj-chronometre-bleu';
+    id !== 'fpj-chronometre-bleu' &&
+    id !== 'cartier-tank-louis' &&
+    id !== 'cartier-crash' &&
+    id !== 'piaget-polo-79' &&
+    id !== 'mbf-lm101';
 
   const crownStops: CrownStopOption[] = [];
   if (crownMode === 'screw-down-3pos') {
@@ -3275,8 +3291,7 @@ export function resolveWatchCapabilities(watch: WatchSpec): WatchCapabilities {
   } else if (
     id === 'ap-royal-oak' ||
     id === 'pp-nautilus' ||
-    id === 'gp-laureato' ||
-    id === 'vc-overseas'
+    id === 'gp-laureato'
   ) {
     allowedBelts = ['bracelet', 'oysterflex'];
   } else if (
